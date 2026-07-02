@@ -6,7 +6,9 @@ import { refreshIndex } from "../core/services/refresh-service.js";
 import { applyInstallPlan, applyUninstallPlan, buildInstallPlan, buildUninstallPlan } from "../core/services/install-service.js";
 import { runDoctor } from "../core/services/doctor-service.js";
 import { addRepoSource, addSource, listSources, removeSource, setSourceEnabled, syncSources } from "../core/services/source-service.js";
-import { addSingleSkill, importSkill, preferSkill } from "../core/services/skill-service.js";
+import { addSingleSkill, importSkill, preferSkill, searchSkills } from "../core/services/skill-service.js";
+import { formatSkillRows } from "./skill-format.js";
+import type { SkillRecord } from "../core/models/skill.js";
 import { adoptSkill, listDiscover, setIgnored } from "../core/services/discover-service.js";
 
 const cli = cac("asm");
@@ -29,18 +31,24 @@ cli.command("refresh", "Scan sources and update index").action(async () => {
   void configStore;
 });
 
-cli.command("skill <subcommand> [name]", "Skill commands: list, info, add, import, prefer")
+cli.command("skill <subcommand> [name]", "Skill commands: list, search, info, add, import, prefer")
   .option("--source <id>", "Source id (for prefer)")
   .option("--id <id>", "Custom source id (for add/import)")
   .action(async (subcommand: string, name?: string, options: { source?: string; id?: string } = {}) => {
     if (subcommand === "list") {
       const { index } = await loadStores();
       const skills = Object.values(index.skills).sort((a, b) => a.name.localeCompare(b.name));
-      if (!skills.length) {
-        console.log("No skills indexed. Run `asm refresh` first.");
-        return;
-      }
-      for (const item of skills) console.log(`${item.name}\t${item.status}\t${item.description ?? ""}`);
+      printSkillLines(skills, "No skills indexed. Run `asm refresh` first.");
+      return;
+    }
+    if (subcommand === "search") {
+      const keyword = name ?? "";
+      const { index } = await loadStores();
+      const skills = searchSkills(index, keyword);
+      printSkillLines(
+        skills,
+        keyword.trim() ? `No skills matching '${keyword.trim()}'` : "No skills indexed. Run `asm refresh` first."
+      );
       return;
     }
     if (subcommand === "info") {
@@ -225,6 +233,23 @@ cli.command("doctor", "Run health checks").action(async () => {
   if (checks.some((check) => check.status === "error")) process.exitCode = 1;
 });
 
+cli.command("tui", "Open interactive TUI").action(async () => {
+  if (!process.stdout.isTTY) {
+    console.error("TUI requires an interactive terminal.");
+    process.exitCode = 1;
+    return;
+  }
+  // config 缺失先给终端友好错误（与其它非 init 命令一致）；index 缺失由 App 的
+  // useIndexState 自动首次 refresh，故此处只校验 config。
+  const configStore = new ConfigStore();
+  if (!(await configStore.exists())) throw new Error("config.toml not found. Run `asm init` first.");
+  // 懒加载 Ink/React 与 TUI，避免常用 CLI 命令承担 React 打包开销。.js 扩展遵循 NodeNext。
+  const { createElement } = await import("react");
+  const { render } = await import("ink");
+  const { App } = await import("../tui/App.js");
+  render(createElement(App));
+});
+
 cli.help();
 cli.parse();
 
@@ -249,4 +274,13 @@ function symbol(status: "ok" | "warning" | "error"): string {
   if (status === "ok") return "✓";
   if (status === "warning") return "!";
   return "✗";
+}
+
+/** skill list/search 的表格输出；空结果打印 emptyMessage（如「No skills matching 'x'」）。 */
+function printSkillLines(skills: readonly SkillRecord[], emptyMessage: string): void {
+  if (!skills.length) {
+    console.log(emptyMessage);
+    return;
+  }
+  for (const line of formatSkillRows(skills)) console.log(line);
 }

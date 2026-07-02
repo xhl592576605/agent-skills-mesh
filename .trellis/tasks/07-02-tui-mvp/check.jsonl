@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "校验写操作经 plan/apply、无按键直改文件系统、终端安全符号"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "校验 symlink/storage 安全契约、plan/apply 分离、repair 仅对 symlink"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "校验 pending plan 状态机与 refresh 流未被绕过"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "校验复用核心类型、无 UI 专用副本、readonly props"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "校验 throw/typed-status/ENOENT 约定未被违反"}
+{"file": ".trellis/spec/guides/index.md", "reason": "校验跨层边界与代码复用、无重复扫描/安装逻辑"}

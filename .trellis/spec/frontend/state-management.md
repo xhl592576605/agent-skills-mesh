@@ -45,7 +45,26 @@ Practical rules:
 
 ---
 
-## When to Use Global State
+## Config Mutation Requires Full Snapshot Reload
+
+The TUI snapshot is a single `{ config, index }` pair sourced from `useIndexState`. After any action that mutates `config.toml` (adopt / ignore / unignore / prefer, which write user-intent overrides), the snapshot must be reloaded **whole** — re-read both `config` and `index` — not just the `index`.
+
+**Why**: These operations change the *user-intent* layer (`config.toml`), not the *scan-facts* layer (`index.json`). If the UI only updates `index` while keeping the stale `config`, the next `refreshIndex(config, index)` closes over the stale config and silently drops the just-written `managed` / `ignored` / `preferredSourceId` overrides — Matrix and Discover then drift from filesystem reality.
+
+```ts
+// useDiscover: adopt/ignore write config.toml → must reload (re-read config + index)
+async function adopt(skillName: string) {
+  await adoptSkill(configStore, indexStore, skillName); // writes config + refreshes index
+  reload();                                             // re-read BOTH config and index
+}
+
+// useDoctor: repair mutates only the filesystem (no config change) → refresh() is enough,
+// but the App-level effect must still SET_SNAPSHOT with the fresh {config, index} pair.
+```
+
+**Related**: See `src/tui/App.tsx` effect that dispatches `SET_SNAPSHOT` after `useIndexState.reload()` / `refresh()`. Never rebuild half of the snapshot.
+
+
 
 There is no global UI store today. If the Ink TUI grows beyond simple prop passing, use a minimal local TUI state container only for cross-screen concerns such as:
 
@@ -69,4 +88,5 @@ No server state exists. All current state is local file and filesystem state. Do
 - Do not store generated scan facts in `config.toml`.
 - Do not let UI state become the source of truth for installed symlinks; refresh/detect from the filesystem.
 - Do not apply changes directly while editing a matrix cell.
+- After a config-mutating action (adopt/ignore/prefer), do not dispatch a snapshot that pairs a stale `config` with a fresh `index` — reload both, or the next `refresh` drops the new overrides (see "Config Mutation Requires Full Snapshot Reload" above).
 - Do not introduce a global state library for the current CLI-only codebase.

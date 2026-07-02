@@ -1,0 +1,12 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "TUI 层编码约束总入口：目录结构、组件边界、状态管理、类型安全、hooks、质量"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "src/tui/** 目录与文件边界硬约束（App/screens/components/hooks/state）"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件只渲染+收集交互、props 复用核心类型、回调表达意图"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "pending plan 状态机（Idle→EditingMatrix→PendingPlan→ReviewPlan→Applying→RefreshIndex）与刷新流"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "复用 src/core/models/** 严格类型，禁止 UI 专用副本"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "src/tui/hooks/ 命名与 .ts/.tsx 区分（无 JSX 用 .ts）"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "写操作经 plan/apply、ASM_HOME 临时目录测试、终端安全符号不依赖颜色"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "service 扩展遵循 throw/typed-status/ENOENT-only catch 约定"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "symlink/storage 安全契约与 plan/apply 分离、repair 仅对 symlink unlink"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "core service 保持 logger-optional，TUI 不直接 console.log 副作用"}
+{"file": ".trellis/spec/guides/index.md", "reason": "跨层数据流与代码复用思维指南（修改常量前先搜索）"}
+{"file": ".trellis/tasks/archive/2026-07/07-02-agent-skills-mesh/design.md", "reason": "产品技术设计：域模型、InstallAction repair-broken-link 预留、状态机"}
