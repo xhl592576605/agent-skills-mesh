@@ -6,6 +6,7 @@
     "lib": ["ES2022"],
     "strict": true,
     "esModuleInterop": true,
+    "jsx": "react-jsx",
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "outDir": "dist",
