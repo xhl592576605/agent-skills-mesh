@@ -27,7 +27,7 @@
   - `local-dir`：本地目录，可能包含多个 Skills。
   - `single-skill`：手动添加的单个 Skill 目录。
   - `global-dir`：例如 `~/.agents/skills`。
-  - `agent-dir`：例如 `~/.claude/skills`、`~/.codex/skills`、`~/.pi/skills`、`~/.gemini/skills`。
+  - `agent-dir`：例如 `~/.claude/skills`、`~/.codex/skills`、`~/.pi/agent/skills`、`~/.gemini/skills`。
 - 自动识别 `SKILL.md`：
   - `<skill-name>/SKILL.md`
   - `skills/<skill-name>/SKILL.md`

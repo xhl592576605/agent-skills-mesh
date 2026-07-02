@@ -75,7 +75,7 @@ applyUninstallPlan(plan: UninstallPlan): Promise<void>
 
 - Good: tests and smoke tests set `ASM_HOME` to a temp directory and set Agent `skills_dir` values to temp directories before running install/uninstall.
 - Base: `asm install foo --agent pi --dry-run` prints a plan and leaves `pi-skills/foo` absent.
-- Bad: running install tests against real `~/.pi/skills`, or allowing `asm init` to replace a user's existing config without `--force`.
+- Bad: running install tests against real `~/.pi/agent/skills`, or allowing `asm init` to replace a user's existing config without `--force`.
 
 ### 6. Tests Required
 
@@ -199,7 +199,7 @@ setIgnored(configStore: ConfigStore, indexStore: IndexStore, skillName: string, 
 - Good: `asm adopt foo` moves `tmp/pi-skills/foo` to `tmp/global-skills/foo`, creates `tmp/pi-skills/foo -> tmp/global-skills/foo`, writes `[skill-overrides.foo] managed = true`, and refreshes status to `managed`.
 - Base: `asm source add-repo <local-test-repo>` clones into a temporary `ASM_HOME/repos/<id>` and registers a `git-repo` source only after clone succeeds.
 - Bad: copying a discovered skill into the global source while leaving the original real directory in the Agent directory, causing duplicate candidates and conflicts.
-- Bad: using real `~/.agents/skills` or `~/.pi/skills` in tests or smoke tests.
+- Bad: using real `~/.agents/skills` or `~/.pi/agent/skills` in tests or smoke tests.
 
 ### 6. Tests Required
 

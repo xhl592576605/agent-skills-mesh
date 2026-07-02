@@ -25,7 +25,7 @@ The project does not currently define a lint script.
 - Do not add React/Ink dependencies unless implementing actual TUI behavior.
 - Do not put filesystem mutation logic in components, hooks, or UI state stores.
 - Do not bypass core service plans for install/uninstall actions.
-- Do not make tests depend on the user's real `~/.pi/skills`, `~/.claude/skills`, `~/.codex/skills`, or `~/.agent-skills-mesh` directories.
+- Do not make tests depend on the user's real `~/.pi/agent/skills`, `~/.claude/skills`, `~/.codex/skills`, or `~/.agent-skills-mesh` directories.
 
 ---
 

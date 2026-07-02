@@ -127,7 +127,7 @@ Validation（M2 完成后）:
 
 ```bash
 ASM_HOME=<tmp> asm init
-# 在 tmp agent skills_dir 手建真实目录 ~/.pi/skills/my-helper/SKILL.md
+# 在 tmp agent skills_dir 手建真实目录 ~/.pi/agent/skills/my-helper/SKILL.md
 ASM_HOME=<tmp> asm refresh
 ASM_HOME=<tmp> asm discover                  # 列出 discovered: my-helper
 ASM_HOME=<tmp> asm adopt my-helper           # 移到 ~/.agents/skills + 原位 symlink + managed
@@ -146,7 +146,7 @@ ASM_HOME=<tmp> asm unignore foo
 ```bash
 pnpm typecheck
 pnpm test
-# 全部 smoke 用临时 ASM_HOME + 临时目录，不碰真实 ~/.pi/skills / ~/.agents/skills
+# 全部 smoke 用临时 ASM_HOME + 临时目录，不碰真实 ~/.pi/agent/skills / ~/.agents/skills
 # git 测试用本地 git init 临时 repo，不联网
 ```
 

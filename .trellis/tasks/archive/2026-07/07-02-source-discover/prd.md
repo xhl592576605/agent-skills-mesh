@@ -86,13 +86,13 @@
 - `adopt` 必须只作用于 `discovered` 状态的 skill；对其它状态报错。
 - **adopt 物理接管**：把 discovered skill 的真实目录**移动**到 `~/.agents/skills/<name>`（通用 global source 目录），并在**原 agent 目录位置建 symlink** 指向新位置（agent 立即可用、已受管，无需手动 install）。
 - adopt 后在 `config.toml` 写 `[skill-overrides.<name>] managed = true`，下次 `refresh` 该 skill 状态为 `managed`。
-- 原则：agent 目录（`~/.pi/skills` 等）是纯 symlink 区，真实 skill 只存在于 source 目录；scanner 扫 agent-dir 时跳过 symlink（它们是安装产物）。
+- 原则：agent 目录（`~/.pi/agent/skills` 等）是纯 symlink 区，真实 skill 只存在于 source 目录；scanner 扫 agent-dir 时跳过 symlink（它们是安装产物）。
 - 目标位置 `~/.agents/skills/<name>` 若已存在同名，adopt 报错不覆盖。
 - `ignore` 写入后 `refresh` / `discover` 不再把它列为需处理项；`skill list` 仍可显示（带 ignored 标记）。
 
 ### R6. 安全与隔离
 
-- 所有新增写操作（source 增删、clone、import 复制、prefer/ignore/adopt）必须有对应单元测试，且测试使用临时 `ASM_HOME` + 临时目录，不碰真实 `~/.agents/skills` / `~/.pi/skills` 等。
+- 所有新增写操作（source 增删、clone、import 复制、prefer/ignore/adopt）必须有对应单元测试，且测试使用临时 `ASM_HOME` + 临时目录，不碰真实 `~/.agents/skills` / `~/.pi/agent/skills` 等。
 - git 操作通过 node 内置 `node:child_process`（`execFile`）调用系统 `git`，不引入 `execa` / `isomorphic-git` 等额外或纯 JS 实现（execa 未装且 `pnpm add` 受限；保持与系统 git 行为一致，并符合现有代码全用 node 内置模块的风格）。
 
 ## Acceptance Criteria

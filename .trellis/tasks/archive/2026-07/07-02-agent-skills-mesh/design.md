@@ -75,7 +75,7 @@ skills_dir = "~/.codex/skills"
 [agents.pi]
 name = "Pi"
 enabled = true
-skills_dir = "~/.pi/skills"
+skills_dir = "~/.pi/agent/skills"
 
 [agents.gemini]
 name = "Gemini"
@@ -201,7 +201,7 @@ repo/skills/foo/SKILL.md
 repo/foo/SKILL.md
 single-skill/SKILL.md
 ~/.agents/skills/foo/SKILL.md
-~/.pi/skills/foo/SKILL.md
+~/.pi/agent/skills/foo/SKILL.md
 ```
 
 ### `scanSource(source)` Algorithm

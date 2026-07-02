@@ -282,7 +282,7 @@ ASM_HOME=/tmp/asm-test-home asm install frontend-design --agent pi --dry-run
 ## Rollback Points
 
 - Before implementing symlink operations, ensure tests use temporary directories.
-- Never run install tests against real `~/.pi/skills` or `~/.claude/skills` by default.
+- Never run install tests against real `~/.pi/agent/skills` or `~/.claude/skills` by default.
 - If scanner/index model proves wrong, stop after Phase 2 and revise `prd.md`/`design.md` before continuing.
 - If TUI state becomes complex, keep TUI read-only until CLI behavior is stable.
 

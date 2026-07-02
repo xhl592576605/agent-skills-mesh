@@ -42,7 +42,7 @@ File System / Git (utils/git.ts)                      ← 新增 git clone/pull
 
 `adopt <discovered-skill>`：
 
-1. 取该 skill 的 discovered candidate 真实目录（如 `~/.pi/skills/my-helper`）。
+1. 取该 skill 的 discovered candidate 真实目录（如 `~/.pi/agent/skills/my-helper`）。
 2. **移动**到 `~/.agents/skills/<name>`（通用 global source 目录）；目标已存在同名则报错不覆盖。
 3. 在**原 candidate 路径建 symlink** 指向新位置 —— 原 agent 立即可用，且现在是受管 symlink（非散落真实目录）。
 4. 写 `config.toml` 的 `[skill-overrides.<name>] managed = true`。

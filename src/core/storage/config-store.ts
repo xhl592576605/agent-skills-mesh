@@ -27,7 +27,7 @@ export function createDefaultConfig(): AppConfig {
     agents: {
       claude: { name: "Claude Code", enabled: true, skills_dir: "~/.claude/skills" },
       codex: { name: "Codex", enabled: true, skills_dir: "~/.codex/skills" },
-      pi: { name: "Pi", enabled: true, skills_dir: "~/.pi/skills" },
+      pi: { name: "Pi", enabled: true, skills_dir: "~/.pi/agent/skills" },
       gemini: { name: "Gemini", enabled: false, skills_dir: "~/.gemini/skills" }
     },
     skillOverrides: {}

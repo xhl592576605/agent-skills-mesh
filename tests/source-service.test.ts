@@ -43,7 +43,7 @@ async function makeRemoteRepo(): Promise<string> {
 
 /**
  * 构造完全隔离的临时 ASM_HOME：paths 指向临时目录，清空默认 source/agents，
- * 确保 refresh / git clone 绝不触碰真实 ~/.agents/skills / ~/.pi/skills。
+ * 确保 refresh / git clone 绝不触碰真实 ~/.agents/skills / ~/.pi/agent/skills。
  */
 async function setupHome(): Promise<{ home: string; store: ConfigStore; config: AppConfig }> {
   const home = await tempDir("asm-src-home-");
