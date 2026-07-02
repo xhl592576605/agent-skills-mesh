@@ -116,6 +116,149 @@ node dist/cli/index.js install foo --agent pi
 
 ---
 
+## Scenario: Source Management, Skill Overrides, and Discover Adoption
+
+### 1. Scope / Trigger
+
+- Trigger: Agent Skills Mesh added dynamic source management, git repository sync, single-skill import/prefer, discover, adopt, ignore, and unignore commands.
+- Applies to: `src/cli/index.ts`, `src/core/services/source-service.ts`, `src/core/services/skill-service.ts`, `src/core/services/discover-service.ts`, `src/core/services/refresh-service.ts`, `src/core/storage/config-store.ts`, and `src/utils/git.ts`.
+- Required because these commands mutate user-owned directories, cloned repositories, `config.toml`, `index.json`, and Agent skill directories.
+
+### 2. Signatures
+
+CLI command signatures:
+
+```txt
+asm source list
+asm source add <path> [--id <id>]
+asm source add-repo <git-url> [--id <id>] [--branch <branch>]
+asm source sync [id]
+asm source remove <id> [--purge]
+asm source enable <id>
+asm source disable <id>
+asm skill add <path> [--id <id>]
+asm skill import <path> [--id <id>]
+asm skill prefer <name> --source <source-id>
+asm discover
+asm adopt <skill>
+asm ignore <skill>
+asm unignore <skill>
+```
+
+Core service signatures:
+
+```ts
+ConfigStore.write(config: AppConfig): Promise<void>
+addSource(configStore: ConfigStore, dirPath: string, options?: { id?: string }): Promise<SourceConfig>
+addRepoSource(configStore: ConfigStore, gitUrl: string, options?: { id?: string; branch?: string }): Promise<SourceConfig>
+syncSources(configStore: ConfigStore, sourceId?: string): Promise<SyncResult[]>
+removeSource(configStore: ConfigStore, id: string, options?: { purge?: boolean }): Promise<void>
+setSourceEnabled(configStore: ConfigStore, id: string, enabled: boolean): Promise<void>
+addSingleSkill(configStore: ConfigStore, dirPath: string, options?: { id?: string }): Promise<SourceConfig>
+importSkill(configStore: ConfigStore, dirPath: string, options?: { id?: string }): Promise<SourceConfig>
+preferSkill(configStore: ConfigStore, indexStore: IndexStore, skillName: string, sourceId: string): Promise<void>
+listDiscover(index: IndexFile): DiscoverEntry[]
+adoptSkill(configStore: ConfigStore, indexStore: IndexStore, skillName: string): Promise<AdoptResult>
+setIgnored(configStore: ConfigStore, indexStore: IndexStore, skillName: string, ignored: boolean): Promise<void>
+```
+
+### 3. Contracts
+
+- User intent for `prefer`, `ignore`, and `adopt` lives in `config.toml` under `[skill-overrides.<name>]`; `index.json` is a fact snapshot only.
+- `refreshIndex()` must merge `config.skillOverrides` into `SkillRecord` status and preferred fields. It must not preserve intent by copying fields from the previous index.
+- `ConfigStore.write()` must be atomic (temp file + rename), same as index writes.
+- Git operations must call the system `git` through Node's built-in `node:child_process` (`execFile`/promisified `execFile`). Do not add `execa`, `isomorphic-git`, or other git libraries for this project.
+- `source add-repo` must clone successfully before writing config. If clone fails, config must remain unchanged and partial clone directories must be cleaned up best-effort.
+- `source sync` must use `git pull --ff-only` for existing repositories. It must report non-fast-forward conflicts and never rebase, stash, merge, or force automatically.
+- `source remove` must not delete cloned repository directories unless `--purge` is explicitly passed, and purge must refuse paths outside the configured repos directory.
+- `skill import` must copy the complete directory including `SKILL.md`; if config write fails after copying, the copied directory must be cleaned up best-effort.
+- `skill prefer` must validate that the source exists and actually provides the requested skill candidate before writing `preferredSourceId`.
+- `adopt` is physical takeover: move the discovered real directory to the configured global source (`~/.agents/skills` by default), create a symlink at the original Agent path pointing to the new source path, write `managed = true`, and refresh the index.
+- `adopt` must not overwrite an existing global source directory. If the skill is already physically inside the global source, adopt only writes `managed = true` and refreshes.
+- Agent skill directories are treated as symlink zones. Real directories there are discoverable external work; symlinks there are installation artifacts and must not become scan candidates.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Duplicate source path or git URL | Refuse or skip without adding a duplicate source |
+| Custom source id already exists | Error; do not mutate config |
+| Local source path is a regular file | Error; do not add source |
+| `add-repo` clone fails | Clean partial clone best-effort; do not write config |
+| `sync` sees non-fast-forward pull | Return failed sync result; do not rebase/stash/force |
+| `remove --purge` target is outside repos dir | Refuse purge |
+| `skill prefer` source does not provide candidate | Error; do not write override |
+| `adopt` target already exists in global source | Error; do not overwrite |
+| `adopt` discovered candidate is symlink or file | Error; only real directories can be adopted |
+| `adopt` has multiple discovered candidates | Error in MVP; require manual resolution first |
+| `ignore` unknown skill | Error; avoid hiding typos |
+| `unignore` removes the last override field | Delete the empty override entry |
+
+### 5. Good/Base/Bad Cases
+
+- Good: `asm adopt foo` moves `tmp/pi-skills/foo` to `tmp/global-skills/foo`, creates `tmp/pi-skills/foo -> tmp/global-skills/foo`, writes `[skill-overrides.foo] managed = true`, and refreshes status to `managed`.
+- Base: `asm source add-repo <local-test-repo>` clones into a temporary `ASM_HOME/repos/<id>` and registers a `git-repo` source only after clone succeeds.
+- Bad: copying a discovered skill into the global source while leaving the original real directory in the Agent directory, causing duplicate candidates and conflicts.
+- Bad: using real `~/.agents/skills` or `~/.pi/skills` in tests or smoke tests.
+
+### 6. Tests Required
+
+- Config override tests:
+  - round-trip `[skill-overrides.<name>]` through `ConfigStore.write()` and `ConfigStore.read()`.
+  - assert invalid override names are rejected before writing unreadable TOML.
+  - assert `managed`, `ignored`, and `preferredSourceId` affect refresh status.
+- Source tests:
+  - add/list local sources; reject duplicate paths and regular files.
+  - add-repo clone success/failure with local git repositories only.
+  - sync clone/pull; non-fast-forward must be reported as failure.
+  - enable/disable/remove/purge paths with temp repos only.
+- Skill tests:
+  - add single-skill; import copies `SKILL.md`; prefer writes config override only after validating candidates.
+- Discover tests:
+  - list discovered/conflict/external/broken-link; exclude ignored skills.
+  - adopt moves real directory, creates symlink, writes managed override, and refreshes status.
+  - adopt refuses existing targets and multi-candidate discovered skills.
+  - ignore/unignore update config and refresh index.
+- CLI smoke tests:
+  - run `init`, `source list`, `skill add` or `source add`, `refresh`, `discover`, `adopt`, `skill info`, `ignore`, and `unignore` under temporary `ASM_HOME` and temporary Agent directories only.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+// Wrong: writes user intent into index.json and lets the next refresh decide whether it survives.
+index.skills[skillName].ignored = true;
+await indexStore.write(index);
+```
+
+#### Correct
+
+```ts
+// Correct: user intent lives in config.toml; refresh derives index facts from it.
+config.skillOverrides[skillName] = { ...config.skillOverrides[skillName], ignored: true };
+await configStore.write(config);
+const next = await refreshIndex(config, index);
+await indexStore.write(next);
+```
+
+#### Wrong
+
+```ts
+// Wrong: copy adopt leaves a second real directory in the Agent directory.
+await fs.cp(agentSkillDir, globalSkillDir, { recursive: true });
+```
+
+#### Correct
+
+```ts
+// Correct: move the real directory, then make the original Agent path a symlink installation artifact.
+await fs.rename(agentSkillDir, globalSkillDir);
+await fs.symlink(globalSkillDir, agentSkillDir, "dir");
+```
+
+---
+
 ## Forbidden Patterns
 
 - Do not silently overwrite user config, index files, existing skill directories, or existing non-matching symlinks.

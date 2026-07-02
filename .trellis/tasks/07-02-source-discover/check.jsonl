@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"核对 config.write 原子写、adopt 文件移动+回滚、git clone/pull 失败不写 config、测试用临时 ASM_HOME 等安全契约。"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"核对意图层(config.skillOverrides)→事实层(index SkillRecord)→安装层(InstallationRecord)的数据流一致性，确认 calculateStatus 改读 overrides 后无回归。"}
+{"file":".trellis/tasks/archive/2026-07/07-02-agent-skills-mesh/design.md","reason":"核对是否复用既有模型而非重构，新增 service 是否符合既有分层与扫描/安装算法。"}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"核对新增文件放置与既有 src/core/services、src/utils、src/cli 分层一致。"}

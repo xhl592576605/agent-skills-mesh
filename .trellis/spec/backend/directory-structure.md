@@ -35,14 +35,14 @@ tests/                        # Vitest tests for scanners, services, storage
 - `src/core/scanners/**` should inspect source directories and return typed records without writing to user directories.
 - `src/core/services/**` should implement use cases and enforce safety rules. Prefer pure plan-building functions plus explicit apply functions for filesystem mutations.
 - `src/core/storage/**` should be the only layer that knows exact storage file paths such as `config.toml` and `index.json`.
-- `src/utils/**` should contain small reusable helpers. Current utilities are `fs.ts`, `hash.ts`, and `path.ts`; search for existing helpers before adding new ones.
+- `src/utils/**` should contain small reusable helpers. Current utilities are `fs.ts`, `hash.ts`, `path.ts`, and `git.ts`; search for existing helpers before adding new ones.
 
 ---
 
 ## Naming Conventions
 
 - Use kebab-case filenames for modules: `config-store.ts`, `install-service.ts`, `skill-scanner.ts`.
-- Use `*-service.ts` for application use cases, as in `src/core/services/install-service.ts`.
+- Use `*-service.ts` for application use cases, as in `src/core/services/install-service.ts`, `source-service.ts`, `skill-service.ts`, and `discover-service.ts`.
 - Use `*-store.ts` for persistence wrappers, as in `src/core/storage/config-store.ts`.
 - Use `*-scanner.ts` for filesystem discovery logic, as in `src/core/scanners/skill-scanner.ts`.
 - Keep model files singular and domain-focused: `skill.ts`, `config.ts`, `installation.ts`.

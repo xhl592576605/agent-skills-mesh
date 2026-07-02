@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"本任务大量写操作（config.write、git clone/pull、文件移动、symlink、import 拷贝）必须遵守原子写、symlink 不覆盖真实目录、ASM_HOME 隔离测试等安全契约。"}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"新增 source-service/skill-service/discover-service 与 utils/git.ts 需放入正确的 cli/core-services/storage 分层。"}
+{"file":".trellis/spec/backend/error-handling.md","reason":"git 失败、目标已存在、未知 source id、多 candidate adopt 等都需要一致的错误处理与友好提示。"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"意图层迁移与 source/skill/discover-service 必须复用既有 scanner/refresh/install-service 与 SourceConfig/SkillRecord 模型，不重复造轮子。"}
+{"file":".trellis/tasks/archive/2026-07/07-02-agent-skills-mesh/design.md","reason":"既有架构与数据模型（SourceConfig/SkillCandidate/SkillRecord/InstallationRecord、refresh 算法、install plan）是本任务复用基础，实现前必须理解。"}
