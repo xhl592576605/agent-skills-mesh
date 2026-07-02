@@ -107,3 +107,38 @@ Implemented Source management and Discover for Agent Skills Mesh: config skill-o
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: Agent Skills Mesh TUI MVP
+
+**Date**: 2026-07-02
+**Task**: Agent Skills Mesh TUI MVP
+**Branch**: `main`
+
+### Summary
+
+Implemented the Ink/React TUI MVP: Matrix (skill x agent grid, per-cell toggle + row batch a/d, pending plan -> review -> apply -> refresh), Discover (adopt/ignore/unignore, jump to Matrix), and Doctor (one-key fix for refresh-index/mkdir-agent-dir/repair-broken-link with confirm). Service-layer extensions: searchSkills, DoctorCheck.fix hints, buildRepairPlan/applyRepairPlan. CLI wiring: asm tui (lazy-load, non-TTY friendly) and asm skill search. 127 tests green, trellis-check passed (safety/spec/AC all PASS). Recorded a known design gap to memory: ~/.agents/skills is auto-scanned by agents like pi, so ASM install/uninstall cannot control its visibility and Matrix may mislabel those skills as available.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `15f898e` | (see git log) |
+| `4a4c233` | (see git log) |
+| `60b0f45` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
