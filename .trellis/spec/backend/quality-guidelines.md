@@ -40,8 +40,8 @@ IndexStore.init(options?: { force?: boolean }): Promise<IndexFile>
 refreshIndex(config: AppConfig, previous: IndexFile): Promise<IndexFile>
 buildInstallPlan(config: AppConfig, index: IndexFile, skillName: string, agentId: string): Promise<InstallPlan>
 applyInstallPlan(plan: InstallPlan): Promise<void>
-buildUninstallPlan(config: AppConfig, skillName: string, agentId: string): Promise<InstallPlan>
-applyUninstallPlan(plan: InstallPlan): Promise<void>
+buildUninstallPlan(config: AppConfig, skillName: string, agentId: string): Promise<UninstallPlan>
+applyUninstallPlan(plan: UninstallPlan): Promise<void>
 ```
 
 ### 3. Contracts

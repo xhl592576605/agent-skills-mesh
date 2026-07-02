@@ -1,51 +1,60 @@
 # Hook Guidelines
 
-> How hooks are used in this project.
+> Hook conventions for the future Ink/React TUI.
 
 ---
 
-## Overview
+## Current State
 
-<!--
-Document your project's hook conventions here.
+There are no React hooks in the current codebase. The project is a CLI/core TypeScript application, and no `src/tui/hooks/` directory exists.
 
-Questions to answer:
-- What custom hooks do you have?
-- How do you handle data fetching?
-- What are the naming conventions?
-- How do you share stateful logic?
--->
+Evidence:
 
-(To be filled by the team)
+- `src/` contains only `cli/`, `core/`, and `utils/`.
+- `package.json` does not include React, Ink, React Query, SWR, or other hook-oriented UI dependencies.
+- Future TUI work is described in `.trellis/tasks/archive/2026-07/07-02-agent-skills-mesh/design.md`, but it has not been implemented.
 
 ---
 
-## Custom Hook Patterns
+## Future Custom Hook Patterns
 
-<!-- How to create and structure custom hooks -->
+If an Ink/React TUI is added, hooks should coordinate UI state and service calls, not own domain rules.
 
-(To be filled by the team)
+Recommended boundaries:
+
+- Hooks may load config/index state through storage classes from `src/core/storage/**`.
+- Hooks may call service functions such as `runDoctor()`, `refreshIndex()`, `buildInstallPlan()`, and `buildUninstallPlan()`.
+- Hooks should keep pending UI state separate from persisted data until the user confirms an action.
+- Domain calculations should remain in `src/core/services/**` so CLI, tests, and TUI share the same behavior.
 
 ---
 
 ## Data Fetching
 
-<!-- How data fetching is handled (React Query, SWR, etc.) -->
+There is no server data fetching in this project. Current data is local filesystem state:
 
-(To be filled by the team)
+- `ConfigStore.read()` reads `config.toml`.
+- `IndexStore.read()` reads `index.json`.
+- `refreshIndex()` scans local skill sources and agent directories.
+
+Do not introduce React Query, SWR, or HTTP client patterns for the current local CLI/TUI use case.
 
 ---
 
 ## Naming Conventions
 
-<!-- Hook naming rules (use*, etc.) -->
+If hooks are introduced for the TUI:
 
-(To be filled by the team)
+- Use `use*` names, such as `useIndexState`, `useDoctorChecks`, or `useInstallPlan`.
+- Keep hook files under `src/tui/hooks/`.
+- Use `.ts` when no JSX is returned; use `.tsx` only when JSX is needed.
+- Reuse core types rather than creating separate hook-specific data models.
 
 ---
 
 ## Common Mistakes
 
-<!-- Hook-related mistakes your team has made -->
-
-(To be filled by the team)
+- Do not add hooks before adding the TUI runtime and dependencies.
+- Do not place reusable service logic inside hooks.
+- Do not make a hook mutate symlinks directly; build a plan, surface it to the UI, and apply only after confirmation.
+- Do not add browser data-fetching libraries for local file reads.

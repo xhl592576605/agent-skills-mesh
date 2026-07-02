@@ -1,51 +1,96 @@
 # Database Guidelines
 
-> Database patterns and conventions for this project.
+> Database and persistence patterns for this project.
 
 ---
 
-## Overview
+## Current State
 
-<!--
-Document your project's database conventions here.
+No database layer currently exists in Agent Skills Mesh. The project is a Node.js TypeScript CLI that persists small local state files under the ASM home directory rather than using an ORM, SQL database, migrations, or a server-side data store.
 
-Questions to answer:
-- What ORM/query library do you use?
-- How are migrations managed?
-- What are the naming conventions for tables/columns?
-- How do you handle transactions?
--->
+Current persistence files are:
 
-(To be filled by the team)
+- `config.toml` managed by `src/core/storage/config-store.ts`.
+- `index.json` managed by `src/core/storage/index-store.ts`.
+- `state.json` created during `ConfigStore.init()` in `src/core/storage/config-store.ts`.
+
+Reference examples:
+
+- `src/core/storage/config-store.ts` serializes and parses the user-editable TOML config.
+- `src/core/storage/index-store.ts` reads and writes the generated JSON index.
+- `src/utils/fs.ts` provides `atomicWriteFile()` for safe JSON writes.
+- `tests/storage.test.ts` verifies init does not overwrite user config/index unless `force` is passed.
+
+---
+
+## Persistence Boundaries
+
+- Treat `config.toml` as user intent: sources, agents, settings, and paths.
+- Treat `index.json` as generated scan state: sources snapshot, skills, installations, and issues.
+- Do not add ad-hoc persistence from CLI handlers. Add storage behavior under `src/core/storage/**` and keep callers typed.
+- Resolve `~/.agent-skills-mesh` through `resolveConfiguredPath()` / `getAsmHome()` in `src/utils/path.ts`; this preserves `ASM_HOME` override behavior.
 
 ---
 
 ## Query Patterns
 
-<!-- How should queries be written? Batch operations? -->
+There are no database queries. Current read patterns are file-based:
 
-(To be filled by the team)
+- `ConfigStore.read()` reads and parses the whole TOML file.
+- `IndexStore.read()` reads and parses the whole JSON index, returning `createEmptyIndex()` if the file is missing.
+- Services receive typed `AppConfig` and `IndexFile` objects rather than reaching into storage directly.
+
+Follow the service boundary shown by:
+
+- `src/cli/index.ts` `loadStores()` reads stores once and passes typed objects to services.
+- `src/core/services/refresh-service.ts` derives the next `IndexFile` from config, previous index, scanners, and installation detection.
+- `src/core/services/install-service.ts` builds install/uninstall plans from typed config/index input.
 
 ---
 
 ## Migrations
 
-<!-- How to create and run migrations -->
+No migration framework exists. Both persisted formats currently have `version: 1`:
 
-(To be filled by the team)
+- `AppConfig.version` in `src/core/models/config.ts`.
+- `IndexFile.version` in `src/core/models/index.ts`.
+
+If a future schema change is introduced:
+
+1. Add explicit versioned migration logic in the relevant store file.
+2. Keep backward-compatible reads where practical.
+3. Add tests under `tests/storage.test.ts` or a dedicated storage test file.
+4. Preserve user-authored `config.toml` comments only if the serializer/parser is deliberately changed to support that; the current serializer rewrites known fields.
 
 ---
 
 ## Naming Conventions
 
-<!-- Table names, column names, index names -->
+Current persisted field names are stable and should match model names:
 
-(To be filled by the team)
+- Config uses snake_case for TOML settings that users edit, such as `install_strategy`, `default_agent`, `auto_refresh_on_start`, and `skills_dir` (`src/core/storage/config-store.ts`).
+- TypeScript interfaces use the same names where they mirror persisted config (`src/core/models/config.ts`).
+- Index records use camelCase JSON fields such as `updatedAt`, `preferredCandidateId`, and `expectedLinkTarget` (`src/core/models/index.ts`, `src/core/models/skill.ts`, `src/core/models/installation.ts`).
+
+Avoid silently renaming persisted fields without a migration path.
+
+---
+
+## If a Real Database Is Added Later
+
+A future database layer must not bypass current safety contracts:
+
+- Preserve `ASM_HOME` isolation for tests and local runs.
+- Keep filesystem mutation plans explicit before applying symlink changes.
+- Keep generated scan facts separate from user intent.
+- Add a storage adapter under `src/core/storage/**` rather than introducing database access in `src/cli/**`.
+- Include migration tests and a rollback story for local user data.
 
 ---
 
 ## Common Mistakes
 
-<!-- Database-related mistakes your team has made -->
-
-(To be filled by the team)
+- Do not introduce an ORM or migration system just to manage the current small JSON/TOML files.
+- Do not write directly to `index.json` with `fs.writeFile`; use the atomic write pattern from `IndexStore.write()` / `atomicWriteFile()`.
+- Do not read or write the user's real home in tests; pass a temporary home to `ConfigStore` / `IndexStore` or set `ASM_HOME`.
+- Do not store scan results in `config.toml`; generated facts belong in `index.json`.
