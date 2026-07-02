@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "扫描器改动涉及存储/测试安全契约，实现须遵循 quality 门槛"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新增 plugin-manifest.ts 与重构 skill-scanner.ts 须符合 CLI 模块组织与命名约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "plugin manifest 解析与目录扫描须按 filesystem absence / 静默失败约定处理"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "重构扫描器时复用现有 hasSkillMd/buildCandidate，避免重复逻辑与常量漂移"}

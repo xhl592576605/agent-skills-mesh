@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "核查实现满足 storage/symlink/tests 安全契约与 review 要求"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "核查 scanner→refresh→mergeCandidates 跨层数据流无回归、candidate 字段一致"}
