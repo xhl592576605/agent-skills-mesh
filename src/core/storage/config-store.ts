@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { AgentConfig, AppConfig, SourceConfig, SourceType } from "../models/config.js";
-import { ensureDir, pathExists } from "../../utils/fs.js";
+import type { AgentConfig, AppConfig, SkillOverride, SourceConfig, SourceType } from "../models/config.js";
+import { atomicWriteFile, ensureDir, pathExists } from "../../utils/fs.js";
 import { getAsmHome } from "../../utils/path.js";
 
 export function createDefaultConfig(): AppConfig {
@@ -29,7 +29,8 @@ export function createDefaultConfig(): AppConfig {
       codex: { name: "Codex", enabled: true, skills_dir: "~/.codex/skills" },
       pi: { name: "Pi", enabled: true, skills_dir: "~/.pi/skills" },
       gemini: { name: "Gemini", enabled: false, skills_dir: "~/.gemini/skills" }
-    }
+    },
+    skillOverrides: {}
   };
 }
 
@@ -67,6 +68,11 @@ export class ConfigStore {
     const content = await fs.readFile(this.configPath, "utf8");
     return parseConfig(content);
   }
+
+  /** 原子写回 config（读→改→写流程的写出口）。 */
+  async write(config: AppConfig): Promise<void> {
+    await atomicWriteFile(this.configPath, serializeConfig(config));
+  }
 }
 
 export function serializeConfig(config: AppConfig): string {
@@ -95,6 +101,15 @@ export function serializeConfig(config: AppConfig): string {
   for (const [agentId, agent] of Object.entries(config.agents)) {
     lines.push(`[agents.${agentId}]`, `name = ${quote(agent.name)}`, `enabled = ${agent.enabled}`, `skills_dir = ${quote(agent.skills_dir)}`, "");
   }
+  for (const [name, override] of Object.entries(config.skillOverrides)) {
+    assertValidOverrideName(name);
+    lines.push(`[skill-overrides.${name}]`);
+    if (override.managed !== undefined) lines.push(`managed = ${override.managed}`);
+    if (override.ignored !== undefined) lines.push(`ignored = ${override.ignored}`);
+    if (override.preferredSourceId !== undefined) lines.push(`preferredSourceId = ${quote(override.preferredSourceId)}`);
+    if (override.preferredCandidateId !== undefined) lines.push(`preferredCandidateId = ${quote(override.preferredCandidateId)}`);
+    lines.push("");
+  }
   return `${lines.join("\n").trim()}\n`;
 }
 
@@ -105,6 +120,7 @@ function parseConfig(content: string): AppConfig {
   let section = "";
   let currentSource: SourceConfig | undefined;
   let currentAgent: [string, AgentConfig] | undefined;
+  let currentOverrideName: string | undefined;
 
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -124,6 +140,17 @@ function parseConfig(content: string): AppConfig {
       currentSource = undefined;
       continue;
     }
+    const overrideMatch = /^\[skill-overrides\.(.+)]$/.exec(line);
+    if (overrideMatch) {
+      const name = overrideMatch[1];
+      assertValidOverrideName(name);
+      currentOverrideName = name;
+      config.skillOverrides[name] = {};
+      section = "skill-overrides";
+      currentSource = undefined;
+      currentAgent = undefined;
+      continue;
+    }
     const sectionMatch = /^\[(\w+)]$/.exec(line);
     if (sectionMatch) {
       section = sectionMatch[1];
@@ -138,8 +165,20 @@ function parseConfig(content: string): AppConfig {
     else if (section === "paths") (config.paths as Record<string, string>)[key] = String(value);
     else if (section === "sources" && currentSource) (currentSource as unknown as Record<string, unknown>)[key] = key === "type" ? (String(value) as SourceType) : value;
     else if (section === "agent" && currentAgent) (currentAgent[1] as unknown as Record<string, unknown>)[key] = value;
+    else if (section === "skill-overrides" && currentOverrideName) applyOverride(config.skillOverrides[currentOverrideName], key, value);
   }
   return config;
+}
+
+function assertValidOverrideName(name: string): void {
+  if (!/^[a-zA-Z0-9-]+$/.test(name)) throw new Error(`Invalid skill-overrides section name: ${name}`);
+}
+
+function applyOverride(override: SkillOverride, key: string, value: string | boolean | number): void {
+  if (key === "managed") override.managed = Boolean(value);
+  else if (key === "ignored") override.ignored = Boolean(value);
+  else if (key === "preferredSourceId") override.preferredSourceId = String(value);
+  else if (key === "preferredCandidateId") override.preferredCandidateId = String(value);
 }
 
 function splitAssignment(line: string): [string, string] {

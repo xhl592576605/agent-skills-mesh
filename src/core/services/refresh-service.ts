@@ -1,4 +1,4 @@
-import type { AppConfig, SourceConfig } from "../models/config.js";
+import type { AppConfig, SkillOverride, SourceConfig } from "../models/config.js";
 import { createEmptyIndex, type IndexFile, type IssueRecord } from "../models/index.js";
 import type { SkillCandidate, SkillRecord, SkillStatus } from "../models/skill.js";
 import { scanSource } from "../scanners/skill-scanner.js";
@@ -7,7 +7,10 @@ import { detectInstallations } from "./install-service.js";
 export async function refreshIndex(config: AppConfig, previous: IndexFile = createEmptyIndex()): Promise<IndexFile> {
   const sources = buildRefreshSources(config);
   const candidates = (await Promise.all(sources.filter((source) => source.enabled).map(scanSource))).flat();
-  const skills = mergeCandidates(candidates, previous);
+  const skills = mergeCandidates(candidates, config.skillOverrides);
+  for (const name of Object.keys(previous.skills)) {
+    if (!skills[name]) skills[name] = buildSkillRecord(name, [], config.skillOverrides[name]);
+  }
   const installations = await detectInstallations(config, skills);
   const issues = buildIssues(skills, installations);
   return {
@@ -35,40 +38,42 @@ export function buildRefreshSources(config: AppConfig): SourceConfig[] {
   return sources;
 }
 
-export function mergeCandidates(candidates: SkillCandidate[], previous: IndexFile = createEmptyIndex()): Record<string, SkillRecord> {
+export function mergeCandidates(candidates: SkillCandidate[], overrides: Record<string, SkillOverride> = {}): Record<string, SkillRecord> {
   const groups = new Map<string, SkillCandidate[]>();
   for (const candidate of candidates) {
     groups.set(candidate.skillName, [...(groups.get(candidate.skillName) ?? []), candidate]);
   }
   const skills: Record<string, SkillRecord> = {};
   for (const [name, group] of groups) {
-    const old = previous.skills[name];
-    const preferredCandidateId = old?.preferredCandidateId && group.some((candidate) => candidate.id === old.preferredCandidateId) ? old.preferredCandidateId : undefined;
-    const preferredSourceId = old?.preferredSourceId && group.some((candidate) => candidate.sourceId === old.preferredSourceId) ? old.preferredSourceId : undefined;
-    const status = calculateStatus(group, preferredCandidateId, preferredSourceId, old?.ignored);
-    const tags = [...new Set(group.flatMap((candidate) => candidate.tags))];
-    skills[name] = {
-      name,
-      displayName: name,
-      description: group.find((candidate) => candidate.description)?.description,
-      tags,
-      status,
-      preferredCandidateId,
-      preferredSourceId,
-      candidates: group.sort((a, b) => a.path.localeCompare(b.path)),
-      ignored: old?.ignored
-    };
-  }
-  for (const [name, old] of Object.entries(previous.skills)) {
-    if (!skills[name]) skills[name] = { ...old, status: "missing", candidates: [] };
+    skills[name] = buildSkillRecord(name, group, overrides[name]);
   }
   return skills;
 }
 
-function calculateStatus(candidates: SkillCandidate[], preferredCandidateId?: string, preferredSourceId?: string, ignored?: boolean): SkillStatus {
-  if (ignored) return "ignored";
+function buildSkillRecord(name: string, group: SkillCandidate[], override?: SkillOverride): SkillRecord {
+  const preferredCandidateId = override?.preferredCandidateId && group.some((candidate) => candidate.id === override.preferredCandidateId) ? override.preferredCandidateId : undefined;
+  const preferredSourceId = override?.preferredSourceId && group.some((candidate) => candidate.sourceId === override.preferredSourceId) ? override.preferredSourceId : undefined;
+  const tags = [...new Set(group.flatMap((candidate) => candidate.tags))];
+  return {
+    name,
+    displayName: name,
+    description: group.find((candidate) => candidate.description)?.description,
+    tags,
+    status: calculateStatus(group, override),
+    preferredCandidateId,
+    preferredSourceId,
+    candidates: group.sort((a, b) => a.path.localeCompare(b.path)),
+    ignored: override?.ignored
+  };
+}
+
+function calculateStatus(candidates: SkillCandidate[], override?: SkillOverride): SkillStatus {
+  if (override?.ignored) return "ignored";
   if (candidates.length === 0) return "missing";
-  if (candidates.length > 1 && !preferredCandidateId && !preferredSourceId) return "conflict";
+  if (override?.managed) return "managed";
+  const hasPreferred = (override?.preferredCandidateId && candidates.some((candidate) => candidate.id === override.preferredCandidateId)) || (override?.preferredSourceId && candidates.some((candidate) => candidate.sourceId === override.preferredSourceId));
+  if (candidates.length > 1 && !hasPreferred) return "conflict";
+  if (hasPreferred) return "managed";
   if (candidates.every((candidate) => candidate.origin === "global-dir" || candidate.origin === "agent-dir")) return "discovered";
   return "managed";
 }

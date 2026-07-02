@@ -21,3 +21,8 @@ export async function atomicWriteFile(filePath: string, content: string): Promis
   await fs.writeFile(tempPath, content, "utf8");
   await fs.rename(tempPath, filePath);
 }
+
+/** 递归删除目录或文件；`force: true` 使目标不存在时不报错（用于回滚清理半成品）。 */
+export async function removeRecursive(target: string): Promise<void> {
+  await fs.rm(target, { recursive: true, force: true });
+}

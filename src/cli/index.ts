@@ -5,6 +5,9 @@ import { IndexStore } from "../core/storage/index-store.js";
 import { refreshIndex } from "../core/services/refresh-service.js";
 import { applyInstallPlan, applyUninstallPlan, buildInstallPlan, buildUninstallPlan } from "../core/services/install-service.js";
 import { runDoctor } from "../core/services/doctor-service.js";
+import { addRepoSource, addSource, listSources, removeSource, setSourceEnabled, syncSources } from "../core/services/source-service.js";
+import { addSingleSkill, importSkill, preferSkill } from "../core/services/skill-service.js";
+import { adoptSkill, listDiscover, setIgnored } from "../core/services/discover-service.js";
 
 const cli = cac("asm");
 
@@ -26,34 +29,64 @@ cli.command("refresh", "Scan sources and update index").action(async () => {
   void configStore;
 });
 
-cli.command("skill <subcommand> [name]", "Skill commands: list, info <name>").action(async (subcommand: string, name?: string) => {
-  if (subcommand === "list") {
-    const { index } = await loadStores();
-    const skills = Object.values(index.skills).sort((a, b) => a.name.localeCompare(b.name));
-    if (!skills.length) {
-      console.log("No skills indexed. Run `asm refresh` first.");
+cli.command("skill <subcommand> [name]", "Skill commands: list, info, add, import, prefer")
+  .option("--source <id>", "Source id (for prefer)")
+  .option("--id <id>", "Custom source id (for add/import)")
+  .action(async (subcommand: string, name?: string, options: { source?: string; id?: string } = {}) => {
+    if (subcommand === "list") {
+      const { index } = await loadStores();
+      const skills = Object.values(index.skills).sort((a, b) => a.name.localeCompare(b.name));
+      if (!skills.length) {
+        console.log("No skills indexed. Run `asm refresh` first.");
+        return;
+      }
+      for (const item of skills) console.log(`${item.name}\t${item.status}\t${item.description ?? ""}`);
       return;
     }
-    for (const item of skills) console.log(`${item.name}\t${item.status}\t${item.description ?? ""}`);
-    return;
-  }
-  if (subcommand === "info") {
-    if (!name) throw new Error("Usage: asm skill info <name>");
-    const { index } = await loadStores();
-    const item = index.skills[name];
-    if (!item) throw new Error(`Skill not found: ${name}`);
-    console.log(`Name: ${item.name}`);
-    console.log(`Status: ${item.status}`);
-    if (item.description) console.log(`Description: ${item.description}`);
-    if (item.preferredSourceId) console.log(`Preferred source: ${item.preferredSourceId}`);
-    console.log("Candidates:");
-    for (const candidate of item.candidates) console.log(`- ${candidate.id}\n  source: ${candidate.sourceId} (${candidate.sourceType})\n  path: ${candidate.path}\n  description: ${candidate.description ?? ""}`);
-    console.log("Installations:");
-    for (const installation of Object.values(index.installations).filter((record) => record.skillName === item.name)) console.log(`- ${installation.agentId}: ${installation.status} ${installation.targetPath}${installation.reason ? ` (${installation.reason})` : ""}`);
-    return;
-  }
-  throw new Error(`Unknown skill command: ${subcommand}`);
-});
+    if (subcommand === "info") {
+      if (!name) throw new Error("Usage: asm skill info <name>");
+      const { index } = await loadStores();
+      const item = index.skills[name];
+      if (!item) throw new Error(`Skill not found: ${name}`);
+      console.log(`Name: ${item.name}`);
+      console.log(`Status: ${item.status}`);
+      if (item.description) console.log(`Description: ${item.description}`);
+      if (item.preferredSourceId) console.log(`Preferred source: ${item.preferredSourceId}`);
+      console.log("Candidates:");
+      for (const candidate of item.candidates) console.log(`- ${candidate.id}\n  source: ${candidate.sourceId} (${candidate.sourceType})\n  path: ${candidate.path}\n  description: ${candidate.description ?? ""}`);
+      console.log("Installations:");
+      for (const installation of Object.values(index.installations).filter((record) => record.skillName === item.name)) console.log(`- ${installation.agentId}: ${installation.status} ${installation.targetPath}${installation.reason ? ` (${installation.reason})` : ""}`);
+      return;
+    }
+    if (subcommand === "add") {
+      if (!name) throw new Error("Usage: asm skill add <path>");
+      const { configStore } = await loadStores();
+      const source = await addSingleSkill(configStore, name, { id: options.id });
+      console.log(`Added skill source ${source.id} -> ${source.path}`);
+      console.log("Run `asm refresh` to index this skill.");
+      return;
+    }
+    if (subcommand === "import") {
+      if (!name) throw new Error("Usage: asm skill import <path>");
+      const { configStore } = await loadStores();
+      const source = await importSkill(configStore, name, { id: options.id });
+      console.log(`Imported skill source ${source.id} -> ${source.path}`);
+      console.log("Run `asm refresh` to index this skill.");
+      return;
+    }
+    if (subcommand === "prefer") {
+      if (!name) throw new Error("Usage: asm skill prefer <name> --source <id>");
+      if (!options.source) throw new Error("Missing required option: --source <id>");
+      const { configStore, indexStore, config, index } = await loadStores();
+      const fresh = await refreshIndex(config, index);
+      await indexStore.write(fresh);
+      await preferSkill(configStore, indexStore, name, options.source);
+      console.log(`Preferred source for ${name}: ${options.source}`);
+      console.log("Run `asm refresh` to apply the preference.");
+      return;
+    }
+    throw new Error(`Unknown skill command: ${subcommand}`);
+  });
 
 cli.command("install <skillName>", "Install skill for an agent")
   .option("--agent <agent>", "Agent id")
@@ -80,6 +113,107 @@ cli.command("uninstall <skillName>", "Uninstall skill symlink for an agent")
     await applyUninstallPlan(plan);
     console.log("Uninstall applied");
   });
+
+cli.command("source <subcommand> [arg]", "Source commands: list, add, add-repo, sync, remove, enable, disable")
+  .option("--id <id>", "Custom source id (for add/add-repo)")
+  .option("--branch <branch>", "Branch to clone (for add-repo)")
+  .option("--purge", "Also delete the cloned repository directory (for remove)")
+  .action(async (subcommand: string, arg?: string, options: { id?: string; branch?: string; purge?: boolean } = {}) => {
+    if (subcommand === "list") {
+      const { config } = await loadStores();
+      const sources = listSources(config);
+      if (!sources.length) {
+        console.log("No sources configured.");
+        return;
+      }
+      for (const source of sources) {
+        const meta = [source.url ? `url=${source.url}` : "", source.branch ? `branch=${source.branch}` : ""].filter(Boolean).join(" ");
+        console.log(`${source.id}\t${source.type}\t${source.enabled ? "enabled" : "disabled"}\t${source.path}${meta ? `\t${meta}` : ""}`);
+      }
+      return;
+    }
+    if (subcommand === "add") {
+      if (!arg) throw new Error("Usage: asm source add <path>");
+      const { configStore } = await loadStores();
+      const source = await addSource(configStore, arg, { id: options.id });
+      console.log(`Added source ${source.id} (${source.type}) -> ${source.path}`);
+      console.log("Run `asm refresh` to index skills from this source.");
+      return;
+    }
+    if (subcommand === "add-repo") {
+      if (!arg) throw new Error("Usage: asm source add-repo <url>");
+      const { configStore } = await loadStores();
+      const source = await addRepoSource(configStore, arg, { id: options.id, branch: options.branch });
+      console.log(`Cloned and added source ${source.id} (git-repo) -> ${source.path}`);
+      console.log("Run `asm refresh` to index skills from this source.");
+      return;
+    }
+    if (subcommand === "sync") {
+      const { configStore } = await loadStores();
+      const results = await syncSources(configStore, arg);
+      if (!results.length) {
+        console.log("No git-repo sources to sync.");
+        return;
+      }
+      for (const result of results) {
+        const status = result.success ? "ok" : `failed${result.error ? `: ${result.error}` : ""}`;
+        console.log(`${result.sourceId}\t${result.action}\t${status}`);
+      }
+      console.log("Run `asm refresh` to update the index.");
+      return;
+    }
+    if (subcommand === "remove") {
+      if (!arg) throw new Error("Usage: asm source remove <id>");
+      const { configStore } = await loadStores();
+      await removeSource(configStore, arg, { purge: options.purge });
+      console.log(`Removed source ${arg}`);
+      return;
+    }
+    if (subcommand === "enable") {
+      if (!arg) throw new Error("Usage: asm source enable <id>");
+      const { configStore } = await loadStores();
+      await setSourceEnabled(configStore, arg, true);
+      console.log(`Enabled source ${arg}`);
+      return;
+    }
+    if (subcommand === "disable") {
+      if (!arg) throw new Error("Usage: asm source disable <id>");
+      const { configStore } = await loadStores();
+      await setSourceEnabled(configStore, arg, false);
+      console.log(`Disabled source ${arg}`);
+      return;
+    }
+    throw new Error(`Unknown source command: ${subcommand}`);
+  });
+
+cli.command("discover", "List discovered, external, broken-link, and conflict items").action(async () => {
+  const { index } = await loadStores();
+  const entries = listDiscover(index);
+  if (!entries.length) {
+    console.log("No discoverable items.");
+    return;
+  }
+  for (const entry of entries) console.log(`${entry.kind}\t${entry.skillName}\t${entry.detail}`);
+});
+
+cli.command("adopt <skill>", "Move a discovered skill into the global source and symlink it back").action(async (skill: string) => {
+  const { configStore, indexStore } = await loadStores();
+  const result = await adoptSkill(configStore, indexStore, skill);
+  console.log(`Adopted ${result.skillName}: ${result.sourcePath} -> ${result.targetPath}`);
+  if (result.sourcePath !== result.targetPath) console.log(`Reinstalled symlink at ${result.sourcePath}`);
+});
+
+cli.command("ignore <skill>", "Ignore a discoverable skill").action(async (skill: string) => {
+  const { configStore, indexStore } = await loadStores();
+  await setIgnored(configStore, indexStore, skill, true);
+  console.log(`Ignored ${skill}`);
+});
+
+cli.command("unignore <skill>", "Stop ignoring a skill").action(async (skill: string) => {
+  const { configStore, indexStore } = await loadStores();
+  await setIgnored(configStore, indexStore, skill, false);
+  console.log(`Unignored ${skill}`);
+});
 
 cli.command("doctor", "Run health checks").action(async () => {
   const configStore = new ConfigStore();
