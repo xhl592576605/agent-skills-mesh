@@ -1,0 +1,3 @@
+{"file":".trellis/spec/backend/index.md","reason":"检查 CLI、核心服务、扫描、索引和安装逻辑是否符合后端质量要求。"}
+{"file":".trellis/spec/frontend/index.md","reason":"检查 Ink/React TUI 组件、状态和类型安全是否符合前端质量要求。"}
+{"file":".trellis/spec/guides/index.md","reason":"检查跨层数据流、重复抽象和配置变更是否经过必要思考。"}
