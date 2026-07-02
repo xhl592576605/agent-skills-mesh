@@ -19,7 +19,7 @@ export function createDefaultConfig(): AppConfig {
         id: "global-agents-skills",
         name: "Global Agents Skills",
         type: "global-dir",
-        path: "~/.agents/skills",
+        path: "~/.agent-skills-mesh/skills",
         enabled: true,
         readonly: false
       }
@@ -28,7 +28,10 @@ export function createDefaultConfig(): AppConfig {
       claude: { name: "Claude Code", enabled: true, skills_dir: "~/.claude/skills" },
       codex: { name: "Codex", enabled: true, skills_dir: "~/.codex/skills" },
       pi: { name: "Pi", enabled: true, skills_dir: "~/.pi/agent/skills" },
-      gemini: { name: "Gemini", enabled: false, skills_dir: "~/.gemini/skills" }
+      gemini: { name: "Gemini", enabled: false, skills_dir: "~/.gemini/skills" },
+      opencode: { name: "OpenCode", enabled: false, skills_dir: "~/.config/opencode/skills" },
+      openclaw: { name: "OpenClaw", enabled: false, skills_dir: "~/.openclaw/skills" },
+      hermes: { name: "Hermes", enabled: false, skills_dir: "~/.hermes/skills" },
     },
     skillOverrides: {}
   };
