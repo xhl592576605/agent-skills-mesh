@@ -73,3 +73,37 @@ Committed Trellis platform/bootstrap files, filled backend and frontend project 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Source management and discover
+
+**Date**: 2026-07-02
+**Task**: Source management and discover
+**Branch**: `main`
+
+### Summary
+
+Implemented Source management and Discover for Agent Skills Mesh: config skill-overrides intent layer, source add/add-repo/sync/remove/enable/disable, skill add/import/prefer, discover/adopt/ignore/unignore, git via child_process, tests, smoke validation, and backend safety contracts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c0d0ce3` | (see git log) |
+| `6d44f2d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
