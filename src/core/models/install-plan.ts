@@ -21,3 +21,19 @@ export interface UninstallPlan {
   hasConflict: boolean;
   warnings: string[];
 }
+
+/**
+ * 修复 broken-link symlink 的独立 plan（不并入 InstallAction 联合，避免改动 install/uninstall plan 语义）。
+ * unlink 旧 symlink 后重建指向 preferred candidate 的新 symlink。
+ */
+export interface RepairPlan {
+  id: string;
+  skillName: string;
+  agentId: string;
+  /** Agent skills_dir 下的 symlink 目标路径。 */
+  targetPath: string;
+  /** preferred candidate 的绝对路径，重建 symlink 指向它。 */
+  newTarget: string;
+  hasConflict: boolean;
+  warnings: string[];
+}

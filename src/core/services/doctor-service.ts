@@ -7,16 +7,33 @@ import { IndexStore } from "../storage/index-store.js";
 import { pathExists } from "../../utils/fs.js";
 import { resolveConfiguredPath } from "../../utils/path.js";
 
+/** 一键修复动作（「哪些可修复」的知识留在 service 层，UI 只按 fix.type 调度）。 */
+export interface DoctorFix {
+  type: "refresh-index" | "mkdir-agent-dir" | "repair-broken-link";
+  /** repair-broken-link 用。 */
+  skillName?: string;
+  /** repair-broken-link / mkdir-agent-dir 用。 */
+  agentId?: string;
+  /** mkdir / repair 用。 */
+  targetPath?: string;
+}
+
 export interface DoctorCheck {
   status: "ok" | "warning" | "error";
   kind: string;
   message: string;
+  /** 存在则该检查项可一键修复。 */
+  fix?: DoctorFix;
 }
 
 export async function runDoctor(configStore: ConfigStore, indexStore: IndexStore, config?: AppConfig, index?: IndexFile): Promise<DoctorCheck[]> {
   const checks: DoctorCheck[] = [];
   checks.push((await configStore.exists()) ? ok("config", `config exists: ${configStore.configPath}`) : error("config", `config missing: ${configStore.configPath}`));
-  checks.push((await indexStore.exists()) ? ok("index", `index exists: ${indexStore.indexPath}`) : error("index", `index missing: ${indexStore.indexPath}`));
+  checks.push(
+    (await indexStore.exists())
+      ? ok("index", `index exists: ${indexStore.indexPath}`)
+      : error("index", `index missing: ${indexStore.indexPath}`, { type: "refresh-index" })
+  );
   if (!config) return checks;
   for (const source of config.sources) {
     const sourcePath = resolveConfiguredPath(source.path);
@@ -29,7 +46,7 @@ export async function runDoctor(configStore: ConfigStore, indexStore: IndexStore
     }
     const dir = resolveConfiguredPath(agent.skills_dir);
     if (!(await pathExists(dir))) {
-      checks.push(warn("agent-dir", `agent skills_dir missing: ${agentId} (${dir})`));
+      checks.push(warn("agent-dir", `agent skills_dir missing: ${agentId} (${dir})`, { type: "mkdir-agent-dir", agentId, targetPath: dir }));
       continue;
     }
     try {
@@ -44,13 +61,21 @@ export async function runDoctor(configStore: ConfigStore, indexStore: IndexStore
       if (skill.status === "conflict") checks.push(warn("conflict", `skill conflict: ${skill.name}`));
     }
     for (const installation of Object.values(index.installations)) {
-      if (installation.status === "broken-link") checks.push(warn("broken-link", `broken symlink: ${installation.targetPath}`));
+      if (installation.status === "broken-link")
+        checks.push(
+          warn("broken-link", `broken symlink: ${installation.targetPath}`, {
+            type: "repair-broken-link",
+            skillName: installation.skillName,
+            agentId: installation.agentId,
+            targetPath: installation.targetPath
+          })
+        );
       if (installation.status === "conflict") checks.push(warn("conflict", `installation conflict: ${installation.targetPath}`));
     }
   }
   return checks;
 }
 
-const ok = (kind: string, message: string): DoctorCheck => ({ status: "ok", kind, message });
-const warn = (kind: string, message: string): DoctorCheck => ({ status: "warning", kind, message });
-const error = (kind: string, message: string): DoctorCheck => ({ status: "error", kind, message });
+const ok = (kind: string, message: string, fix?: DoctorFix): DoctorCheck => ({ status: "ok", kind, message, ...(fix ? { fix } : {}) });
+const warn = (kind: string, message: string, fix?: DoctorFix): DoctorCheck => ({ status: "warning", kind, message, ...(fix ? { fix } : {}) });
+const error = (kind: string, message: string, fix?: DoctorFix): DoctorCheck => ({ status: "error", kind, message, ...(fix ? { fix } : {}) });

@@ -3,7 +3,7 @@ import path from "node:path";
 import type { AppConfig } from "../models/config.js";
 import type { IndexFile } from "../models/index.js";
 import type { InstallationRecord } from "../models/installation.js";
-import type { InstallAction, InstallPlan, UninstallPlan } from "../models/install-plan.js";
+import type { InstallAction, InstallPlan, RepairPlan, UninstallPlan } from "../models/install-plan.js";
 import type { SkillCandidate, SkillRecord } from "../models/skill.js";
 import { ensureDir, pathExists } from "../../utils/fs.js";
 import { resolveConfiguredPath } from "../../utils/path.js";
@@ -102,6 +102,46 @@ export async function applyUninstallPlan(plan: UninstallPlan): Promise<void> {
   for (const action of plan.actions) {
     if (action.type === "skip" && action.reason === "remove symlink" && action.targetPath) await fs.unlink(action.targetPath);
   }
+}
+
+/**
+ * 构建 broken-link 修复 plan：解析 agent.skills_dir/skillName 为 targetPath，
+ * 用 selectCandidate 得到 newTarget。仅当 target 当前是 symlink 时可修（hasConflict=false）；
+ * 真实目录/文件、目标不存在、agent disabled 或无 candidate 时 hasConflict=true 并以 warnings 说明。
+ */
+export async function buildRepairPlan(config: AppConfig, index: IndexFile, skillName: string, agentId: string): Promise<RepairPlan> {
+  const skill = index.skills[skillName];
+  if (!skill) throw new Error(`Skill not found: ${skillName}`);
+  const agent = config.agents[agentId];
+  if (!agent) throw new Error(`Agent not found: ${agentId}`);
+
+  const targetPath = path.join(resolveConfiguredPath(agent.skills_dir), skill.name);
+  const candidate = selectCandidate(skill);
+  const warnings: string[] = [];
+  const base = { id: `repair:${skillName}:${agentId}:${Date.now()}`, skillName, agentId, targetPath };
+
+  if (!candidate) return { ...base, newTarget: "", hasConflict: true, warnings: ["no preferred candidate for skill"] };
+  if (!agent.enabled) return { ...base, newTarget: candidate.path, hasConflict: true, warnings: ["agent is disabled"] };
+  if (!(await pathExists(candidate.path))) return { ...base, newTarget: candidate.path, hasConflict: true, warnings: ["source skill is missing"] };
+
+  const lstat = await safeLstat(targetPath);
+  if (!lstat) return { ...base, newTarget: candidate.path, hasConflict: true, warnings: ["target does not exist (nothing to repair)"] };
+  if (lstat.isSymbolicLink()) return { ...base, newTarget: candidate.path, hasConflict: false, warnings };
+  return { ...base, newTarget: candidate.path, hasConflict: true, warnings: ["target is a real directory or file"] };
+}
+
+/**
+ * 应用修复 plan：hasConflict 时抛错；否则 unlink 旧 symlink 后重建指向 newTarget 的新 symlink。
+ * 防御性安全：unlink 前再 lstat 确认是 symlink，真实目录/文件拒绝删除；ENOENT 视为缺失并抛出清晰错误。
+ */
+export async function applyRepairPlan(plan: RepairPlan): Promise<void> {
+  if (plan.hasConflict) throw new Error("Repair plan has conflicts");
+  const lstat = await safeLstat(plan.targetPath);
+  if (!lstat) throw new Error(`Repair target does not exist: ${plan.targetPath}`);
+  if (!lstat.isSymbolicLink()) throw new Error(`Repair target is not a symlink (refusing to delete real directory or file): ${plan.targetPath}`);
+  await fs.unlink(plan.targetPath);
+  await ensureDir(path.dirname(plan.targetPath));
+  await fs.symlink(plan.newTarget, plan.targetPath, "dir");
 }
 
 export function selectCandidate(skill: SkillRecord): SkillCandidate | undefined {

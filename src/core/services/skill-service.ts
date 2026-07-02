@@ -1,11 +1,30 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { IndexFile } from "../models/index.js";
+import type { SkillRecord } from "../models/skill.js";
 import type { SourceConfig } from "../models/config.js";
 import { ConfigStore } from "../storage/config-store.js";
 import type { IndexStore } from "../storage/index-store.js";
 import { ensureDir, pathExists, removeRecursive } from "../../utils/fs.js";
 import { resolveConfiguredPath } from "../../utils/path.js";
 import { dedupeId, slugify } from "./source-service.js";
+
+/**
+ * 按 keyword 子串过滤 index 中的 skills（匹配 name/displayName/description/tags，大小写不敏感）。
+ * 空 keyword（或纯空白）返回全部 skill，按 name 排序。
+ */
+export function searchSkills(index: IndexFile, keyword: string): SkillRecord[] {
+  const needle = keyword.trim().toLowerCase();
+  const skills = Object.values(index.skills).sort((a, b) => a.name.localeCompare(b.name));
+  if (!needle) return skills;
+  return skills.filter((skill) => {
+    if (skill.name.toLowerCase().includes(needle)) return true;
+    if (skill.displayName.toLowerCase().includes(needle)) return true;
+    if (skill.description?.toLowerCase().includes(needle)) return true;
+    if (skill.tags.some((tag) => tag.toLowerCase().includes(needle))) return true;
+    return false;
+  });
+}
 
 /** 注册单个 skill 目录为 `single-skill` source；校验 `dirPath/SKILL.md` 存在。 */
 export async function addSingleSkill(configStore: ConfigStore, dirPath: string, options: { id?: string } = {}): Promise<SourceConfig> {
