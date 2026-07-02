@@ -39,3 +39,37 @@ Implemented the first Agent Skills Mesh CLI checkpoint: TypeScript/pnpm project 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Bootstrap Trellis guidelines
+
+**Date**: 2026-07-02
+**Task**: Bootstrap Trellis guidelines
+**Branch**: `main`
+
+### Summary
+
+Committed Trellis platform/bootstrap files, filled backend and frontend project guideline specs with real Agent Skills Mesh conventions, validated specs had no placeholders, and archived the bootstrap guidelines task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `afe5bfa` | (see git log) |
+| `4efb1aa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
