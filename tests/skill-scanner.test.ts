@@ -51,4 +51,70 @@ describe("skill scanner", () => {
     expect(skills.shared.status).toBe("conflict");
     expect(skills.shared.candidates).toHaveLength(2);
   });
+
+  test("scans nested skills/<category>/<skill>/SKILL.md (depth-2)", async () => {
+    const root = await tempDir();
+    await writeSkill(path.join(root, "skills", "engineering", "tdd"), "# body");
+    const candidates = await scanSource({ id: "repo", name: "Repo", type: "local-dir", path: root, enabled: true });
+    expect(candidates.map((c) => c.skillName)).toEqual(["tdd"]);
+  });
+
+  test("does not descend past a discovered SKILL.md (no examples noise)", async () => {
+    const root = await tempDir();
+    await writeSkill(path.join(root, "skills", "my-skill"), "# body");
+    await writeSkill(path.join(root, "skills", "my-skill", "examples", "inner"), "# body");
+    const candidates = await scanSource({ id: "repo", name: "Repo", type: "local-dir", path: root, enabled: true });
+    expect(candidates.map((c) => c.skillName)).toEqual(["my-skill"]);
+  });
+
+  test("skips SKIP_DIRS (node_modules, .git, dist, build, __pycache__)", async () => {
+    const root = await tempDir();
+    await writeSkill(path.join(root, "skills", "real"), "# body");
+    await writeSkill(path.join(root, "skills", "node_modules", "evil"), "# body");
+    await writeSkill(path.join(root, "skills", ".git", "evil2"), "# body");
+    const candidates = await scanSource({ id: "repo", name: "Repo", type: "local-dir", path: root, enabled: true });
+    expect(candidates.map((c) => c.skillName).sort()).toEqual(["real"]);
+  });
+
+  test("root stays depth-1: examples/foo/SKILL.md not surfaced when priority hits", async () => {
+    const root = await tempDir();
+    await writeSkill(path.join(root, "skills", "real"), "# body");
+    await writeSkill(path.join(root, "examples", "foo"), "# body");
+    const candidates = await scanSource({ id: "repo", name: "Repo", type: "local-dir", path: root, enabled: true });
+    expect(candidates.map((c) => c.skillName).sort()).toEqual(["real"]);
+  });
+
+  test("discovers skills declared in .claude-plugin/plugin.json", async () => {
+    const root = await tempDir();
+    await writeSkill(path.join(root, "deep", "special"), "# body");
+    await fs.mkdir(path.join(root, ".claude-plugin"), { recursive: true });
+    await fs.writeFile(path.join(root, ".claude-plugin", "plugin.json"), JSON.stringify({ name: "p", skills: ["./deep/special"] }), "utf8");
+    const candidates = await scanSource({ id: "repo", name: "Repo", type: "local-dir", path: root, enabled: true });
+    expect(candidates.map((c) => c.skillName)).toContain("special");
+  });
+
+  test("ignores plugin manifest skill paths missing ./ prefix", async () => {
+    const root = await tempDir();
+    await writeSkill(path.join(root, "skills", "normal"), "# body");
+    await writeSkill(path.join(root, "deep", "special"), "# body");
+    await fs.mkdir(path.join(root, ".claude-plugin"), { recursive: true });
+    await fs.writeFile(path.join(root, ".claude-plugin", "plugin.json"), JSON.stringify({ name: "p", skills: ["deep/special"] }), "utf8");
+    const candidates = await scanSource({ id: "repo", name: "Repo", type: "local-dir", path: root, enabled: true });
+    expect(candidates.map((c) => c.skillName).sort()).toEqual(["normal"]);
+  });
+
+  test("falls back to recursive scan when priority dirs are empty", async () => {
+    const root = await tempDir();
+    await writeSkill(path.join(root, "a", "b", "c", "deep-skill"), "# body");
+    const candidates = await scanSource({ id: "repo", name: "Repo", type: "local-dir", path: root, enabled: true });
+    expect(candidates.map((c) => c.skillName)).toEqual(["deep-skill"]);
+  });
+
+  test("agent-dir source stays depth-1 (flat install dir)", async () => {
+    const root = await tempDir();
+    await writeSkill(path.join(root, "installed"), "# body");
+    await writeSkill(path.join(root, "installed", "sub", "inner"), "# body");
+    const candidates = await scanSource({ id: "agent-x-skills", name: "X", type: "agent-dir", path: root, enabled: true });
+    expect(candidates.map((c) => c.skillName).sort()).toEqual(["installed"]);
+  });
 });

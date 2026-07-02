@@ -28,6 +28,7 @@ Use these guidelines when changing:
 | [Error Handling](./error-handling.md) | CLI errors, typed domain statuses, filesystem absence handling | Active |
 | [Quality Guidelines](./quality-guidelines.md) | Safety contracts for storage, symlinks, tests, and reviews | Active |
 | [Logging Guidelines](./logging-guidelines.md) | Current CLI output conventions and no-logger boundary | Active |
+| [Scanner Conventions](./scanner-conventions.md) | skill-scanner discovery: priority dirs, depth-2 nesting, no-descent, SKIP_DIRS, plugin manifest, fallback | Active |
 
 ---
 
