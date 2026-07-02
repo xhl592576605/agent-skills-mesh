@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
-- **Last Active**: 2026-07-02
+- **Total Sessions**: 5
+- **Last Active**: 2026-07-03
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~144 | Active |
+| `journal-1.md` | ~177 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-07-03 | Scanner: nested skill dirs + plugin manifest (align skills.sh) | `6be17f9` | `main` |
 | 4 | 2026-07-02 | Agent Skills Mesh TUI MVP | `15f898e`, `4a4c233`, `60b0f45` | `main` |
 | 3 | 2026-07-02 | Source management and discover | `c0d0ce3`, `6d44f2d` | `main` |
 | 2 | 2026-07-02 | Bootstrap Trellis guidelines | `afe5bfa`, `4efb1aa` | `main` |

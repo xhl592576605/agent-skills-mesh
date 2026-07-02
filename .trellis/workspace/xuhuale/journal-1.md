@@ -142,3 +142,36 @@ Implemented the Ink/React TUI MVP: Matrix (skill x agent grid, per-cell toggle +
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Scanner: nested skill dirs + plugin manifest (align skills.sh)
+
+**Date**: 2026-07-03
+**Task**: Scanner: nested skill dirs + plugin manifest (align skills.sh)
+**Branch**: `main`
+
+### Summary
+
+对齐 skills.sh 重构扫描器: priority 目录 + 容器 depth-2 (skills/<category>/<skill>/SKILL.md) + 遇 SKILL.md 不下钻 + SKIP_DIRS + .claude-plugin manifest + fallback 递归; agent-dir/global-dir 保持 depth-1。mattpocock/skills 索引 0->21; 135/135 测试通过。新增 plugin-manifest.ts + scanner-conventions spec。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6be17f9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
