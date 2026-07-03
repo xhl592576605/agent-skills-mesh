@@ -5,6 +5,7 @@ import { applyRepairPlan, buildRepairPlan } from "../../core/services/install-se
 import { ensureDir } from "../../utils/fs.js";
 import { ConfigStore } from "../../core/storage/config-store.js";
 import { IndexStore } from "../../core/storage/index-store.js";
+import { StateStore } from "../../core/storage/state-store.js";
 import type { AppConfig } from "../../core/models/config.js";
 import type { IndexFile } from "../../core/models/index.js";
 
@@ -44,6 +45,7 @@ export interface UseDoctorResult {
 export function useDoctor({ config, index, refresh }: UseDoctorInput): UseDoctorResult {
   const [configStore] = useState(() => new ConfigStore());
   const [indexStore] = useState(() => new IndexStore(configStore.home));
+  const [stateStore] = useState(() => new StateStore(configStore.home));
   const [checks, setChecks] = useState<DoctorCheck[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -69,9 +71,9 @@ export function useDoctor({ config, index, refresh }: UseDoctorInput): UseDoctor
     async (check: DoctorCheck): Promise<void> => {
       const fix = check.fix;
       if (!fix) throw new Error("check has no fix");
-      await executeDoctorFix(fix, { config, indexStore, refresh });
+      await executeDoctorFix(fix, { config, indexStore, stateStore, refresh });
     },
-    [config, indexStore, refresh]
+    [config, indexStore, stateStore, refresh]
   );
 
   const applyFix = useCallback(
@@ -108,7 +110,7 @@ export function useDoctor({ config, index, refresh }: UseDoctorInput): UseDoctor
 /** 按 fix.type 调度具体修复动作（repair 读最新 index，避免批量内状态漂移）。 */
 async function executeDoctorFix(
   fix: DoctorFix,
-  ctx: { config: AppConfig; indexStore: IndexStore; refresh: () => Promise<IndexFile> }
+  ctx: { config: AppConfig; indexStore: IndexStore; stateStore: StateStore; refresh: () => Promise<IndexFile> }
 ): Promise<void> {
   switch (fix.type) {
     case "refresh-index":
@@ -122,7 +124,7 @@ async function executeDoctorFix(
       if (!fix.skillName || !fix.agentId) throw new Error("repair-broken-link fix missing skillName/agentId");
       // 读最新 index（磁盘真值）：批量修复时上一条 repair 已改变 FS，重读避免候选漂移。
       const latestIndex = await ctx.indexStore.read();
-      const plan = await buildRepairPlan(ctx.config, latestIndex, fix.skillName, fix.agentId);
+      const plan = await buildRepairPlan(ctx.config, latestIndex, fix.skillName, fix.agentId, await ctx.stateStore.read());
       if (plan.hasConflict) throw new Error(`repair plan has conflicts: ${plan.warnings.join("; ")}`);
       await applyRepairPlan(plan);
       break;

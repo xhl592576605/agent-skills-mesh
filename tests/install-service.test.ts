@@ -6,18 +6,21 @@ import type { AppConfig } from "../src/core/models/config.js";
 import type { IndexFile } from "../src/core/models/index.js";
 import type { SkillRecord } from "../src/core/models/skill.js";
 import { applyInstallPlan, applyRepairPlan, applyUninstallPlan, buildInstallPlan, buildRepairPlan, buildUninstallPlan, detectInstallation } from "../src/core/services/install-service.js";
+import { StateStore } from "../src/core/storage/state-store.js";
 
 async function tempDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "asm-install-"));
 }
 
-function config(agentDir: string): AppConfig {
+function config(agentDir: string, ssotDir = path.join(agentDir, "..", "ssot-skills")): AppConfig {
+  const home = path.dirname(ssotDir);
   return {
     version: 1,
     settings: { install_strategy: "symlink", default_agent: "pi", auto_refresh_on_start: true },
-    paths: { home: "", repos: "", local: "", cache: "" },
-    sources: [],
-    agents: { pi: { name: "Pi", enabled: true, skills_dir: agentDir } }
+    paths: { home, repos: path.join(home, "repos"), local: path.join(home, "local"), cache: path.join(home, "cache"), skills: ssotDir },
+    sources: [{ id: "source-1", name: "Source", type: "local-dir", path: path.dirname(ssotDir), enabled: true }],
+    agents: { pi: { name: "Pi", enabled: true, skills_dir: agentDir } },
+    skillOverrides: {}
   };
 }
 
@@ -51,24 +54,80 @@ function indexWith(skill: SkillRecord): IndexFile {
 }
 
 describe("install service", () => {
+  test("rejects path traversal skill names before planning filesystem writes", async () => {
+    const source = await tempDir();
+    const agentDir = await tempDir();
+    await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
+    const unsafe = skillRecord("../escape", source);
+    const cfg = config(agentDir, path.join(await tempDir(), "skills"));
+    cfg.sources[0].path = source;
+
+    await expect(buildInstallPlan(cfg, indexWith(unsafe), "../escape", "pi")).rejects.toThrow(/Invalid skill name/);
+  });
+
   test("creates symlink when target is missing", async () => {
     const source = await tempDir();
     const agentDir = await tempDir();
     await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
     const skill = skillRecord("foo", source);
-    const plan = await buildInstallPlan(config(agentDir), indexWith(skill), "foo", "pi");
-    expect(plan.actions[0].type).toBe("create-symlink");
-    await applyInstallPlan(plan);
+    const cfg = config(agentDir, path.join(await tempDir(), "skills"));
+    cfg.sources[0].path = source;
+    const stateStore = new StateStore(cfg.paths.home);
+    const plan = await buildInstallPlan(cfg, indexWith(skill), "foo", "pi", await stateStore.read());
+    expect(plan.actions.map((action) => action.type)).toEqual(["copy-to-ssot", "create-symlink", "update-state"]);
+    await applyInstallPlan(plan, stateStore);
     expect((await fs.lstat(path.join(agentDir, "foo"))).isSymbolicLink()).toBe(true);
+    expect(await fs.readlink(path.join(agentDir, "foo"))).toBe(path.join(cfg.paths.skills, "foo"));
+    await expect(fs.lstat(path.join(cfg.paths.skills, "foo", "SKILL.md"))).resolves.toBeDefined();
   });
 
   test("skips existing same symlink", async () => {
     const source = await tempDir();
     const agentDir = await tempDir();
     await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
-    await fs.symlink(source, path.join(agentDir, "foo"), "dir");
-    const plan = await buildInstallPlan(config(agentDir), indexWith(skillRecord("foo", source)), "foo", "pi");
-    expect(plan.actions[0]).toMatchObject({ type: "skip" });
+    const cfg = config(agentDir, path.join(await tempDir(), "skills"));
+    cfg.sources[0].path = source;
+    const stateStore = new StateStore(cfg.paths.home);
+    const installPlan = await buildInstallPlan(cfg, indexWith(skillRecord("foo", source)), "foo", "pi", await stateStore.read());
+    await applyInstallPlan(installPlan, stateStore);
+    const plan = await buildInstallPlan(cfg, indexWith(skillRecord("foo", source)), "foo", "pi", await stateStore.read());
+    expect(plan.actions.some((action) => action.type === "skip")).toBe(true);
+  });
+
+  test("second agent install reuses SSOT content", async () => {
+    const source = await tempDir();
+    const piDir = await tempDir();
+    const claudeDir = await tempDir();
+    await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
+    const cfg = config(piDir, path.join(await tempDir(), "skills"));
+    cfg.sources[0].path = source;
+    cfg.agents.claude = { name: "Claude", enabled: true, skills_dir: claudeDir };
+    const stateStore = new StateStore(cfg.paths.home);
+
+    const first = await buildInstallPlan(cfg, indexWith(skillRecord("foo", source)), "foo", "pi", await stateStore.read());
+    await applyInstallPlan(first, stateStore);
+    const second = await buildInstallPlan(cfg, indexWith(skillRecord("foo", source)), "foo", "claude", await stateStore.read());
+
+    expect(second.actions.map((action) => action.type)).toEqual(["create-symlink", "update-state"]);
+    await applyInstallPlan(second, stateStore);
+    const state = await stateStore.read();
+    expect(Object.keys(state.installedSkills.foo.enabledAgents).sort()).toEqual(["claude", "pi"]);
+    expect(await fs.readlink(path.join(piDir, "foo"))).toBe(path.join(cfg.paths.skills, "foo"));
+    expect(await fs.readlink(path.join(claudeDir, "foo"))).toBe(path.join(cfg.paths.skills, "foo"));
+  });
+
+  test("conflicts when SSOT target exists without state", async () => {
+    const source = await tempDir();
+    const agentDir = await tempDir();
+    await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
+    const cfg = config(agentDir, path.join(await tempDir(), "skills"));
+    cfg.sources[0].path = source;
+    await fs.mkdir(path.join(cfg.paths.skills, "foo"), { recursive: true });
+    await fs.writeFile(path.join(cfg.paths.skills, "foo", "SKILL.md"), "# stale", "utf8");
+
+    const plan = await buildInstallPlan(cfg, indexWith(skillRecord("foo", source)), "foo", "pi");
+    expect(plan.hasConflict).toBe(true);
+    expect(plan.actions).toContainEqual(expect.objectContaining({ type: "conflict", targetPath: path.join(cfg.paths.skills, "foo") }));
   });
 
   test("conflicts on real directory", async () => {
@@ -76,9 +135,11 @@ describe("install service", () => {
     const agentDir = await tempDir();
     await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
     await fs.mkdir(path.join(agentDir, "foo"));
-    const plan = await buildInstallPlan(config(agentDir), indexWith(skillRecord("foo", source)), "foo", "pi");
+    const cfg = config(agentDir, path.join(await tempDir(), "skills"));
+    cfg.sources[0].path = source;
+    const plan = await buildInstallPlan(cfg, indexWith(skillRecord("foo", source)), "foo", "pi");
     expect(plan.hasConflict).toBe(true);
-    expect(plan.actions[0].type).toBe("conflict");
+    expect(plan.actions.some((action) => action.type === "conflict")).toBe(true);
   });
 
   test("detects broken symlink", async () => {
@@ -96,7 +157,7 @@ describe("install service", () => {
     await fs.symlink(source, path.join(agentDir, "foo"), "dir");
     const plan = await buildUninstallPlan(config(agentDir), "foo", "pi");
     expect(plan.hasConflict).toBe(false);
-    expect(plan.actions[0]).toMatchObject({ type: "skip", reason: "remove symlink" });
+    expect(plan.actions[0]).toMatchObject({ type: "remove-symlink" });
     await applyUninstallPlan(plan);
     await expect(fs.lstat(path.join(agentDir, "foo"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(fs.lstat(source)).resolves.toBeDefined();

@@ -5,10 +5,10 @@ import { beforeEach, describe, expect, test } from "vitest";
 import type { AppConfig } from "../src/core/models/config.js";
 import { ConfigStore } from "../src/core/storage/config-store.js";
 import { IndexStore } from "../src/core/storage/index-store.js";
+import { StateStore } from "../src/core/storage/state-store.js";
 import { refreshIndex } from "../src/core/services/refresh-service.js";
 import { addSource } from "../src/core/services/source-service.js";
-import { addSingleSkill, importSkill, preferSkill } from "../src/core/services/skill-service.js";
-import { pathExists } from "../src/utils/fs.js";
+import { addSingleSkill, importSkillToSsot, preferSkill } from "../src/core/services/skill-service.js";
 
 async function tempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -22,7 +22,8 @@ async function setupHome(): Promise<{ home: string; store: ConfigStore; config: 
     home,
     repos: path.join(home, "repos"),
     local: path.join(home, "local"),
-    cache: path.join(home, "cache")
+    cache: path.join(home, "cache"),
+    skills: path.join(home, "skills")
   };
   config.sources = [];
   config.agents = {};
@@ -64,38 +65,21 @@ describe("skill-service add", () => {
   });
 });
 
-describe("skill-service import", () => {
+
+describe("skill-service import to SSOT", () => {
   let store: ConfigStore;
+  let stateStore: StateStore;
 
   beforeEach(async () => {
-    ({ store } = await setupHome());
+    const setup = await setupHome();
+    store = setup.store;
+    stateStore = new StateStore(setup.home);
   });
 
-  test("importSkill copies the full directory into local/ and registers a source", async () => {
-    const src = await tempDir("asm-skill-imp-");
-    await writeSkill(src, "foo");
-    await fs.writeFile(path.join(src, "extra.txt"), "data", "utf8");
-
-    const source = await importSkill(store, src);
-    expect(source.type).toBe("single-skill");
-    expect(await pathExists(path.join(source.path, "SKILL.md"))).toBe(true);
-    expect(await fs.readFile(path.join(source.path, "extra.txt"), "utf8")).toBe("data");
-    expect((await store.read()).sources.some((entry) => entry.id === source.id)).toBe(true);
-  });
-
-  test("importSkill rejects when target name already imported", async () => {
-    const srcA = path.join(await tempDir("asm-imp-a-"), "foo");
-    const srcB = path.join(await tempDir("asm-imp-b-"), "foo");
-    await writeSkill(srcA, "foo");
-    await writeSkill(srcB, "foo");
-
-    await importSkill(store, srcA);
-    await expect(importSkill(store, srcB)).rejects.toThrow(/already exists/i);
-  });
-
-  test("importSkill rejects a directory without SKILL.md", async () => {
-    const dir = await tempDir("asm-imp-noskill-");
-    await expect(importSkill(store, dir)).rejects.toThrow(/SKILL.md/);
+  test("rejects path traversal skill names", async () => {
+    const skillDir = await tempDir("asm-skill-unsafe-");
+    await writeSkill(skillDir, "../escape");
+    await expect(importSkillToSsot(store, stateStore, skillDir)).rejects.toThrow(/Invalid skill name/);
   });
 });
 

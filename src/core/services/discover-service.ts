@@ -1,11 +1,14 @@
 import fs from "node:fs/promises";
-import path from "node:path";
 import { ConfigStore } from "../storage/config-store.js";
 import type { IndexStore } from "../storage/index-store.js";
+import { StateStore } from "../storage/state-store.js";
 import type { IndexFile } from "../models/index.js";
 import { ensureDir, pathExists } from "../../utils/fs.js";
 import { resolveConfiguredPath } from "../../utils/path.js";
+import { sha256Directory } from "../../utils/hash.js";
 import { refreshIndex } from "./refresh-service.js";
+import { createInstalledAgentRecord, getSsotRoot, getSsotSkillPath } from "./ssot-service.js";
+import { assertPathInside } from "../../utils/safe-path.js";
 
 export type DiscoverKind = "discovered" | "external" | "broken-link" | "conflict";
 
@@ -46,14 +49,15 @@ export function listDiscover(index: IndexFile): DiscoverEntry[] {
   return entries;
 }
 
-export async function adoptSkill(configStore: ConfigStore, indexStore: IndexStore, skillName: string): Promise<AdoptResult> {
+export async function adoptSkill(configStore: ConfigStore, indexStore: IndexStore, skillName: string, stateStore = new StateStore(configStore.home)): Promise<AdoptResult> {
   const config = await configStore.read();
-  const originalConfig = structuredClone(config);
   const index = await indexStore.read();
+  const state = await stateStore.read();
   const skill = index.skills[skillName];
   if (!skill) throw new Error(`Skill not found: ${skillName}`);
   if (skill.status !== "discovered") throw new Error(`Skill ${skillName} is not discovered (status=${skill.status})`);
   if (skill.candidates.length !== 1) throw new Error(`Adopt requires exactly one discovered candidate for ${skillName}; found ${skill.candidates.length}`);
+  if (state.installedSkills[skillName]) throw new Error(`Skill already installed in SSOT: ${skillName}`);
 
   const candidate = skill.candidates[0];
   const sourcePath = resolveConfiguredPath(candidate.path);
@@ -61,43 +65,48 @@ export async function adoptSkill(configStore: ConfigStore, indexStore: IndexStor
   if (!sourceStat) throw new Error(`Discovered skill path does not exist: ${sourcePath}`);
   if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink()) throw new Error(`Discovered skill path must be a real directory: ${sourcePath}`);
 
-  const globalSource = config.sources.find((source) => source.type === "global-dir");
-  if (!globalSource) throw new Error("No global-dir source configured for adopt target");
-  const globalDir = resolveConfiguredPath(globalSource.path);
-  const targetPath = path.join(globalDir, skillName);
-  const alreadyInGlobalSource = samePath(sourcePath, targetPath);
-  if (!alreadyInGlobalSource && (await pathExists(targetPath))) throw new Error(`Adopt target already exists: ${targetPath}`);
+  const ssotDir = getSsotRoot(config);
+  const targetPath = getSsotSkillPath(config, skillName);
+  if (await pathExists(targetPath)) throw new Error(`Adopt target already exists: ${targetPath}`);
 
   let moved = false;
   let linked = false;
-  let configWritten = false;
   try {
-    await ensureDir(globalDir);
-    if (!alreadyInGlobalSource) {
-      await fs.rename(sourcePath, targetPath);
-      moved = true;
-      await fs.symlink(targetPath, sourcePath, "dir");
-      linked = true;
-    }
+    await ensureDir(ssotDir);
+    await fs.rename(sourcePath, targetPath);
+    moved = true;
+    await fs.symlink(targetPath, sourcePath, "dir");
+    linked = true;
 
-    config.skillOverrides = {
-      ...config.skillOverrides,
-      [skillName]: { ...config.skillOverrides[skillName], managed: true }
+    const agentId = candidate.sourceId.startsWith("agent-") && candidate.sourceId.endsWith("-skills")
+      ? candidate.sourceId.slice("agent-".length, -"-skills".length)
+      : "unknown";
+    if (agentId !== "unknown") assertPathInside(resolveConfiguredPath(config.agents[agentId]?.skills_dir ?? ""), sourcePath, "agent skill path");
+    const now = new Date().toISOString();
+    state.installedSkills[skillName] = {
+      skillName,
+      displayName: skill.displayName,
+      description: skill.description,
+      tags: skill.tags,
+      ssotPath: targetPath,
+      source: { kind: "manual-import", originalPath: sourcePath },
+      contentHash: await sha256Directory(targetPath),
+      installedAt: now,
+      updatedAt: now,
+      enabledAgents: agentId === "unknown" ? {} : { [agentId]: createInstalledAgentRecord(agentId, sourcePath) }
     };
-    await configStore.write(config);
-    configWritten = true;
+    await stateStore.write(state);
 
-    const next = await refreshIndex(config, index);
+    const next = await refreshIndex(config, index, state);
     await indexStore.write(next);
     return { skillName, sourcePath, targetPath };
   } catch (error) {
     await rollbackAdopt({ sourcePath, targetPath, linked, moved });
-    if (configWritten) await restoreConfig(configStore, originalConfig);
     throw error;
   }
 }
 
-export async function setIgnored(configStore: ConfigStore, indexStore: IndexStore, skillName: string, ignored: boolean): Promise<void> {
+export async function setIgnored(configStore: ConfigStore, indexStore: IndexStore, skillName: string, ignored: boolean, stateStore = new StateStore(configStore.home)): Promise<void> {
   const config = await configStore.read();
   const index = await indexStore.read();
   if (!index.skills[skillName]) throw new Error(`Skill not found: ${skillName}`);
@@ -111,17 +120,13 @@ export async function setIgnored(configStore: ConfigStore, indexStore: IndexStor
   else delete config.skillOverrides[skillName];
 
   await configStore.write(config);
-  const next = await refreshIndex(config, index);
+  const next = await refreshIndex(config, index, await stateStore.read());
   await indexStore.write(next);
 }
 
 function formatInstallationDetail(agentId: string, targetPath: string, linkTarget?: string, reason?: string): string {
   const target = linkTarget ? `${targetPath} -> ${linkTarget}` : targetPath;
   return `${agentId}: ${target}${reason ? ` (${reason})` : ""}`;
-}
-
-function samePath(left: string, right: string): boolean {
-  return path.resolve(left) === path.resolve(right);
 }
 
 async function safeLstat(filePath: string) {
@@ -153,10 +158,3 @@ async function rollbackAdopt(options: { sourcePath: string; targetPath: string; 
   }
 }
 
-async function restoreConfig(configStore: ConfigStore, config: Awaited<ReturnType<ConfigStore["read"]>>): Promise<void> {
-  try {
-    await configStore.write(config);
-  } catch {
-    // best-effort rollback: preserve the original error.
-  }
-}

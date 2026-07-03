@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, test } from "vitest";
 import type { AppConfig } from "../src/core/models/config.js";
+import { createEmptyIndex } from "../src/core/models/index.js";
 import { ConfigStore } from "../src/core/storage/config-store.js";
 import {
   addRepoSource,
@@ -17,6 +18,9 @@ import {
   syncSources,
   type SyncResult
 } from "../src/core/services/source-service.js";
+import { refreshIndex } from "../src/core/services/refresh-service.js";
+import { applyInstallPlan, buildInstallPlan } from "../src/core/services/install-service.js";
+import { StateStore } from "../src/core/storage/state-store.js";
 import { pathExists, removeRecursive } from "../src/utils/fs.js";
 
 const execFileAsync = promisify(execFile);
@@ -53,7 +57,8 @@ async function setupHome(): Promise<{ home: string; store: ConfigStore; config: 
     home,
     repos: path.join(home, "repos"),
     local: path.join(home, "local"),
-    cache: path.join(home, "cache")
+    cache: path.join(home, "cache"),
+    skills: path.join(home, "skills")
   };
   config.sources = [];
   config.agents = {};
@@ -77,7 +82,7 @@ describe("source-service helpers", () => {
     const config: AppConfig = {
       version: 1,
       settings: { install_strategy: "symlink", default_agent: "pi", auto_refresh_on_start: true },
-      paths: { home: "", repos: "", local: "", cache: "" },
+      paths: { home: "", repos: "", local: "", cache: "", skills: "" },
       sources: [
         { id: "skills", name: "a", type: "local-dir", path: "/a", enabled: true },
         { id: "skills-2", name: "b", type: "local-dir", path: "/b", enabled: true }
@@ -200,6 +205,93 @@ describe("source-service sync", () => {
     const pullResults = await syncSources(store);
     expect(pullResults[0].action).toBe("pull");
     expect(pullResults[0].success).toBe(true);
+  });
+
+  test("syncSources updates installed SSOT skills from the synced source", async () => {
+    const remote = await makeRemoteRepo();
+    const source = await addRepoSource(store, remote);
+    const stateStore = new StateStore((await store.read()).paths.home);
+    const agentDir = await tempDir("asm-sync-agent-");
+    const config = await store.read();
+    config.agents = { pi: { name: "Pi", enabled: true, skills_dir: agentDir } };
+    await store.write(config);
+
+    const index = await refreshIndex(await store.read(), createEmptyIndex(), await stateStore.read());
+    const plan = await buildInstallPlan(await store.read(), index, "my-skill", "pi", await stateStore.read());
+    await applyInstallPlan(plan, stateStore);
+    const before = await stateStore.read();
+    const beforeHash = before.installedSkills["my-skill"].contentHash;
+    await expect(fs.readFile(path.join(config.paths.skills, "my-skill", "SKILL.md"), "utf8")).resolves.toContain("hi");
+
+    await fs.writeFile(path.join(remote, "my-skill", "SKILL.md"), "---\nname: my-skill\n---\nupdated\n", "utf8");
+    await gitIn(["add", "."], remote);
+    await gitIn(["commit", "-m", "update skill"], remote);
+
+    const results = await syncSources(store, source.id, stateStore);
+    expect(results[0].updatedSkills).toContain("my-skill");
+    const after = await stateStore.read();
+    expect(after.installedSkills["my-skill"].contentHash).not.toBe(beforeHash);
+    await expect(fs.readFile(path.join(config.paths.skills, "my-skill", "SKILL.md"), "utf8")).resolves.toContain("updated");
+    expect(path.resolve(path.dirname(path.join(agentDir, "my-skill")), await fs.readlink(path.join(agentDir, "my-skill")))).toBe(path.join(config.paths.skills, "my-skill"));
+  });
+
+  test("syncSources updates SSOT when dot-plugin content changes", async () => {
+    const remote = await makeRemoteRepo();
+    await fs.mkdir(path.join(remote, "my-skill", ".claude-plugin"), { recursive: true });
+    await fs.writeFile(path.join(remote, "my-skill", ".claude-plugin", "plugin.json"), "{\"version\":1}\n", "utf8");
+    await gitIn(["add", "."], remote);
+    await gitIn(["commit", "-m", "add plugin manifest"], remote);
+    const source = await addRepoSource(store, remote);
+    const stateStore = new StateStore((await store.read()).paths.home);
+    const agentDir = await tempDir("asm-sync-dot-agent-");
+    const config = await store.read();
+    config.agents = { pi: { name: "Pi", enabled: true, skills_dir: agentDir } };
+    await store.write(config);
+
+    const index = await refreshIndex(await store.read(), createEmptyIndex(), await stateStore.read());
+    const plan = await buildInstallPlan(await store.read(), index, "my-skill", "pi", await stateStore.read());
+    await applyInstallPlan(plan, stateStore);
+    const beforeHash = (await stateStore.read()).installedSkills["my-skill"].contentHash;
+
+    await fs.writeFile(path.join(remote, "my-skill", ".claude-plugin", "plugin.json"), "{\"version\":2}\n", "utf8");
+    await gitIn(["add", "."], remote);
+    await gitIn(["commit", "-m", "update plugin manifest"], remote);
+
+    const results = await syncSources(store, source.id, stateStore);
+    expect(results[0].updatedSkills).toContain("my-skill");
+    expect((await stateStore.read()).installedSkills["my-skill"].contentHash).not.toBe(beforeHash);
+    await expect(fs.readFile(path.join(config.paths.skills, "my-skill", ".claude-plugin", "plugin.json"), "utf8")).resolves.toContain("version\":2");
+  });
+
+  test("syncSources non-fast-forward does not update installed SSOT", async () => {
+    const remote = await makeRemoteRepo();
+    const source = await addRepoSource(store, remote);
+    const stateStore = new StateStore((await store.read()).paths.home);
+    const agentDir = await tempDir("asm-sync-nff-agent-");
+    const config = await store.read();
+    config.agents = { pi: { name: "Pi", enabled: true, skills_dir: agentDir } };
+    await store.write(config);
+
+    const index = await refreshIndex(await store.read(), createEmptyIndex(), await stateStore.read());
+    const plan = await buildInstallPlan(await store.read(), index, "my-skill", "pi", await stateStore.read());
+    await applyInstallPlan(plan, stateStore);
+    const beforeHash = (await stateStore.read()).installedSkills["my-skill"].contentHash;
+    const beforeContent = await fs.readFile(path.join(config.paths.skills, "my-skill", "SKILL.md"), "utf8");
+
+    await fs.writeFile(path.join(remote, "my-skill", "SKILL.md"), "---\nname: my-skill\n---\nremote update\n", "utf8");
+    await gitIn(["add", "."], remote);
+    await gitIn(["commit", "-m", "remote update"], remote);
+    await gitIn(["config", "user.email", "test@example.com"], source.path);
+    await gitIn(["config", "user.name", "Test"], source.path);
+    await fs.writeFile(path.join(source.path, "my-skill", "SKILL.md"), "---\nname: my-skill\n---\nlocal diverge\n", "utf8");
+    await gitIn(["add", "."], source.path);
+    await gitIn(["commit", "-m", "local diverge"], source.path);
+
+    const results = await syncSources(store, source.id, stateStore);
+    expect(results[0].success).toBe(false);
+    expect(results[0].updatedSkills).toBeUndefined();
+    expect((await stateStore.read()).installedSkills["my-skill"].contentHash).toBe(beforeHash);
+    await expect(fs.readFile(path.join(config.paths.skills, "my-skill", "SKILL.md"), "utf8")).resolves.toBe(beforeContent);
   });
 
   test("syncSources with id syncs only that source", async () => {

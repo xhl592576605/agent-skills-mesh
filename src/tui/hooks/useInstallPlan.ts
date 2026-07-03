@@ -9,6 +9,8 @@ import {
   buildUninstallPlan
 } from "../../core/services/install-service.js";
 import type { PendingIntent } from "../state/types.js";
+import { StateStore } from "../../core/storage/state-store.js";
+import { resolveConfiguredPath } from "../../utils/path.js";
 
 /**
  * 单条 pending 的 plan 聚合：意图 + 对应 install/uninstall plan。
@@ -48,6 +50,8 @@ export function useInstallPlan(refresh: RefreshFn): {
   buildReview: (config: AppConfig, index: IndexFile, pending: ReadonlyMap<string, ReadonlyMap<string, PendingIntent>>) => Promise<PlanReview>;
   applyAll: (config: AppConfig, index: IndexFile, pending: ReadonlyMap<string, ReadonlyMap<string, PendingIntent>>) => Promise<ApplyOutcome>;
 } {
+  const stateStoreFor = (config: AppConfig): StateStore => new StateStore(resolveConfiguredPath(config.paths.home));
+
   const buildReview = useCallback(
     async (
       config: AppConfig,
@@ -59,10 +63,11 @@ export function useInstallPlan(refresh: RefreshFn): {
       let conflicts = 0;
       for (const [skillName, agents] of pending) {
         for (const [agentId, intent] of agents) {
+          const stateStore = stateStoreFor(config);
           const plan =
             intent === "install"
-              ? await buildInstallPlan(config, index, skillName, agentId)
-              : await buildUninstallPlan(config, skillName, agentId);
+              ? await buildInstallPlan(config, index, skillName, agentId, await stateStore.read())
+              : await buildUninstallPlan(config, skillName, agentId, await stateStore.read());
           entries.push({ intent, plan });
           totalActions += plan.actions.length;
           if (plan.hasConflict) conflicts += 1;
@@ -84,20 +89,21 @@ export function useInstallPlan(refresh: RefreshFn): {
       for (const [skillName, agents] of pending) {
         for (const [agentId, intent] of agents) {
           try {
+            const stateStore = stateStoreFor(config);
             if (intent === "install") {
-              const plan = await buildInstallPlan(config, index, skillName, agentId);
+              const plan = await buildInstallPlan(config, index, skillName, agentId, await stateStore.read());
               if (plan.hasConflict) {
                 skipped += 1;
                 continue;
               }
-              await applyInstallPlan(plan);
+              await applyInstallPlan(plan, stateStore);
             } else {
-              const plan = await buildUninstallPlan(config, skillName, agentId);
+              const plan = await buildUninstallPlan(config, skillName, agentId, await stateStore.read());
               if (plan.hasConflict) {
                 skipped += 1;
                 continue;
               }
-              await applyUninstallPlan(plan);
+              await applyUninstallPlan(plan, stateStore);
             }
             applied += 1;
           } catch {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { refreshIndex } from "../../core/services/refresh-service.js";
 import { ConfigStore } from "../../core/storage/config-store.js";
 import { IndexStore } from "../../core/storage/index-store.js";
+import { StateStore } from "../../core/storage/state-store.js";
 import { createEmptyIndex } from "../../core/models/index.js";
 import type { AppConfig } from "../../core/models/config.js";
 import type { IndexFile } from "../../core/models/index.js";
@@ -36,6 +37,7 @@ export function useIndexState(): UseIndexStateResult {
   // stores 只创建一次，避免每次 render 重建导致 effect 反复触发。
   const [configStore] = useState(() => new ConfigStore());
   const [indexStore] = useState(() => new IndexStore(configStore.home));
+  const [stateStore] = useState(() => new StateStore(configStore.home));
 
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [index, setIndex] = useState<IndexFile | null>(null);
@@ -53,8 +55,9 @@ export function useIndexState(): UseIndexStateResult {
         }
         const loadedConfig = await configStore.read();
         let loadedIndex = await indexStore.read();
+        const loadedState = await stateStore.read();
         if (loadedIndex.updatedAt === EMPTY_INDEX_SENTINEL) {
-          loadedIndex = await refreshIndex(loadedConfig);
+          loadedIndex = await refreshIndex(loadedConfig, undefined, loadedState);
           await indexStore.write(loadedIndex);
         }
         if (cancelled) return;
@@ -72,15 +75,15 @@ export function useIndexState(): UseIndexStateResult {
     return () => {
       cancelled = true;
     };
-  }, [configStore, indexStore]);
+  }, [configStore, indexStore, stateStore]);
 
   const refresh = useCallback(async () => {
     if (!config) throw new Error("config not loaded yet");
-    const next = await refreshIndex(config, index ?? createEmptyIndex());
+    const next = await refreshIndex(config, index ?? createEmptyIndex(), await stateStore.read());
     await indexStore.write(next);
     setIndex(next);
     return next;
-  }, [config, index, indexStore]);
+  }, [config, index, indexStore, stateStore]);
 
   const reload = useCallback(async () => {
     const reloadedConfig = await configStore.read();

@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { scanSource } from "../src/core/scanners/skill-scanner.js";
 import { mergeCandidates } from "../src/core/services/refresh-service.js";
+import { assertSafeSkillName } from "../src/utils/safe-path.js";
 
 async function tempDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "asm-scanner-"));
@@ -36,6 +37,33 @@ describe("skill scanner", () => {
     await writeSkill(root, "---\nname: single\n---\nbody");
     const candidates = await scanSource({ id: "single", name: "Single", type: "single-skill", path: root, enabled: true });
     expect(candidates.map((candidate) => candidate.skillName)).toEqual(["single"]);
+  });
+
+  test("rejects path traversal skill names from frontmatter", async () => {
+    const root = await tempDir();
+    await writeSkill(path.join(root, "foo"), "---\nname: ../escape\n---\nbody");
+    await expect(scanSource({ id: "repo", name: "Repo", type: "local-dir", path: root, enabled: true })).rejects.toThrow(/Invalid skill name/);
+  });
+
+  test("rejects whitespace and control characters in skill names", async () => {
+    const root = await tempDir();
+    await writeSkill(path.join(root, "foo"), "---\nname: bad name\n---\nbody");
+    await expect(scanSource({ id: "repo", name: "Repo", type: "local-dir", path: root, enabled: true })).rejects.toThrow(/Invalid skill name/);
+
+    expect(() => assertSafeSkillName("bad\u0007name")).toThrow(/Invalid skill name/);
+    expect(() => assertSafeSkillName("bad\u200bname")).toThrow(/Invalid skill name/);
+  });
+
+  test("candidate id stays stable when content hash changes", async () => {
+    const root = await tempDir();
+    const skillDir = path.join(root, "skills", "foo");
+    await writeSkill(skillDir, "---\nname: stable\n---\none");
+    const first = await scanSource({ id: "repo", name: "Repo", type: "local-dir", path: root, enabled: true });
+    await writeSkill(skillDir, "---\nname: stable\n---\ntwo");
+    const second = await scanSource({ id: "repo", name: "Repo", type: "local-dir", path: root, enabled: true });
+
+    expect(second[0].hash).not.toBe(first[0].hash);
+    expect(second[0].id).toBe(first[0].id);
   });
 
   test("detects same-name multi-source conflict", async () => {

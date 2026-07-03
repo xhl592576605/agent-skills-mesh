@@ -44,6 +44,7 @@ export interface AppConfig {
     repos: string;
     local: string;
     cache: string;
+    skills: string;
   };
   sources: SourceConfig[];
   agents: Record<string, AgentConfig>;

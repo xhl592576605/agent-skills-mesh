@@ -8,6 +8,7 @@ import { sha256File } from "../../utils/hash.js";
 import { pathExists } from "../../utils/fs.js";
 import { resolveConfiguredPath, toPosixId } from "../../utils/path.js";
 import { getPluginSkillPaths } from "./plugin-manifest.js";
+import { assertSafeSkillName } from "../../utils/safe-path.js";
 
 /** 扫描时跳过的目录名（对齐 skills.sh）。 */
 const SKIP_DIRS = ["node_modules", ".git", "dist", "build", "__pycache__"];
@@ -131,16 +132,19 @@ async function readDirEntries(dir: string): Promise<Dirent[]> {
 }
 
 async function buildCandidate(source: SourceConfig, skillDir: string, origin: SkillOrigin): Promise<SkillCandidate> {
+  const root = resolveConfiguredPath(source.path);
   const skillFile = path.join(skillDir, "SKILL.md");
   const [content, stat, hash] = await Promise.all([fs.readFile(skillFile, "utf8"), fs.stat(skillDir), sha256File(skillFile)]);
   const parsed = matter(content);
   const frontmatter = parsed.data as Record<string, unknown>;
   const frontmatterName = typeof frontmatter.name === "string" && frontmatter.name.trim() ? frontmatter.name.trim() : undefined;
   const skillName = frontmatterName ?? path.basename(skillDir);
+  assertSafeSkillName(skillName);
   const description = typeof frontmatter.description === "string" ? frontmatter.description : undefined;
   const tags = Array.isArray(frontmatter.tags) ? frontmatter.tags.filter((tag): tag is string => typeof tag === "string") : [];
+  const relative = path.relative(root, skillDir).split(path.sep).join("/") || ".";
   return {
-    id: `${source.id}:${toPosixId(skillName)}:${hash.slice(0, 12)}`,
+    id: `${source.id}:${toPosixId(skillName)}:${toPosixId(relative)}`,
     skillName,
     sourceId: source.id,
     sourceType: source.type,

@@ -12,18 +12,10 @@ export function createDefaultConfig(): AppConfig {
       home: "~/.agent-skills-mesh",
       repos: "~/.agent-skills-mesh/repos",
       local: "~/.agent-skills-mesh/local",
-      cache: "~/.agent-skills-mesh/cache"
+      cache: "~/.agent-skills-mesh/cache",
+      skills: "~/.agent-skills-mesh/skills"
     },
-    sources: [
-      {
-        id: "global-agents-skills",
-        name: "Global Agents Skills",
-        type: "global-dir",
-        path: "~/.agent-skills-mesh/skills",
-        enabled: true,
-        readonly: false
-      }
-    ],
+    sources: [],
     agents: {
       claude: { name: "Claude Code", enabled: true, skills_dir: "~/.claude/skills" },
       codex: { name: "Codex", enabled: true, skills_dir: "~/.codex/skills" },
@@ -52,7 +44,7 @@ export class ConfigStore {
 
   async init(options: { force?: boolean } = {}): Promise<AppConfig> {
     await ensureDir(this.home);
-    await Promise.all(["repos", "local", "cache"].map((name) => ensureDir(path.join(this.home, name))));
+    await Promise.all(["repos", "local", "cache", "skills"].map((name) => ensureDir(path.join(this.home, name))));
 
     if ((await this.exists()) && !options.force) {
       return this.read();
@@ -62,7 +54,7 @@ export class ConfigStore {
     await fs.writeFile(this.configPath, serializeConfig(config), "utf8");
     const statePath = path.join(this.home, "state.json");
     if (options.force || !(await pathExists(statePath))) {
-      await fs.writeFile(statePath, JSON.stringify({ version: 1 }, null, 2), "utf8");
+      await fs.writeFile(statePath, `${JSON.stringify({ version: 1, installedSkills: {} }, null, 2)}\n`, "utf8");
     }
     return config;
   }
@@ -92,6 +84,7 @@ export function serializeConfig(config: AppConfig): string {
     `repos = ${quote(config.paths.repos)}`,
     `local = ${quote(config.paths.local)}`,
     `cache = ${quote(config.paths.cache)}`,
+    `skills = ${quote(config.paths.skills ?? "~/.agent-skills-mesh/skills")}`,
     ""
   ];
   for (const source of config.sources) {

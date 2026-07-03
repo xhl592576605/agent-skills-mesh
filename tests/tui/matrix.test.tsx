@@ -10,6 +10,7 @@ import type { IndexFile } from "../../src/core/models/index.js";
 import type { InstallationRecord, InstallationStatus } from "../../src/core/models/installation.js";
 import type { SkillRecord } from "../../src/core/models/skill.js";
 import { detectInstallations } from "../../src/core/services/install-service.js";
+import { StateStore } from "../../src/core/storage/state-store.js";
 import { Matrix, buildAgentColumns, type MatrixAgentColumn } from "../../src/tui/components/Matrix.js";
 import { MatrixScreen } from "../../src/tui/screens/MatrixScreen.js";
 import { createInitialState, reducer } from "../../src/tui/state/reducer.js";
@@ -117,7 +118,7 @@ function Harness({ config, initialIndex }: { config: AppConfig; initialIndex: In
     snapshot: { config, index: initialIndex }
   }));
   const refresh = useCallback(async () => {
-    const installations = await detectInstallations(config, initialIndex.skills);
+    const installations = await detectInstallations(config, initialIndex.skills, await new StateStore(config.paths.home).read());
     const next: IndexFile = { ...initialIndex, installations };
     dispatch({ type: "SET_SNAPSHOT", snapshot: { config, index: next } });
     return next;
@@ -129,7 +130,7 @@ function staticConfig(): AppConfig {
   return {
     version: 1,
     settings: { install_strategy: "symlink", default_agent: "pi", auto_refresh_on_start: true },
-    paths: { home: "", repos: "", local: "", cache: "" },
+    paths: { home: os.tmpdir(), repos: path.join(os.tmpdir(), "repos"), local: path.join(os.tmpdir(), "local"), cache: path.join(os.tmpdir(), "cache"), skills: path.join(os.tmpdir(), "skills") },
     sources: [],
     agents: {
       claude: { name: "Claude", enabled: true, skills_dir: "/tmp/claude-skills" },
@@ -195,8 +196,11 @@ describe("MatrixScreen interaction", () => {
     const source = await fs.mkdtemp(path.join(os.tmpdir(), "asm-matrix-src-"));
     await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
 
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), "asm-matrix-home-"));
     const config: AppConfig = {
       ...staticConfig(),
+      paths: { home, repos: path.join(home, "repos"), local: path.join(home, "local"), cache: path.join(home, "cache"), skills: path.join(home, "skills") },
+      sources: [{ id: "s1", name: "Source", type: "local-dir", path: source, enabled: true }],
       agents: { pi: { name: "Pi", enabled: true, skills_dir: agentDir } }
     };
     const initialIndex: IndexFile = {

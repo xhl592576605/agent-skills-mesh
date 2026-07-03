@@ -27,7 +27,7 @@ const SCREEN_ORDER: Array<"matrix" | "discover" | "doctor"> = ["matrix", "discov
 const FALLBACK_CONFIG: AppConfig = {
   version: 1,
   settings: { install_strategy: "symlink", default_agent: "pi", auto_refresh_on_start: true },
-  paths: { home: "", repos: "", local: "", cache: "" },
+  paths: { home: "", repos: "", local: "", cache: "", skills: "" },
   sources: [],
   agents: {},
   skillOverrides: {}

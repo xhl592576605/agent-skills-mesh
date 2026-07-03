@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { ConfigStore } from "../src/core/storage/config-store.js";
 import { IndexStore } from "../src/core/storage/index-store.js";
+import { StateStore } from "../src/core/storage/state-store.js";
 
 async function tempDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "asm-storage-"));
@@ -44,5 +45,24 @@ describe("storage init", () => {
 
     await expect(fs.readFile(configStore.configPath, "utf8")).resolves.not.toContain("user custom config");
     await expect(indexStore.read()).resolves.not.toMatchObject({ updatedAt: "custom" });
+  });
+
+  test("state store round-trips installed skills", async () => {
+    const home = await tempDir();
+    const stateStore = new StateStore(home);
+    const state = await stateStore.init();
+    state.installedSkills.foo = {
+      skillName: "foo",
+      displayName: "foo",
+      tags: [],
+      ssotPath: path.join(home, "skills", "foo"),
+      source: { kind: "manual-import", originalPath: "/tmp/foo" },
+      contentHash: "hash",
+      installedAt: "2026-07-03T00:00:00.000Z",
+      updatedAt: "2026-07-03T00:00:00.000Z",
+      enabledAgents: { pi: { agentId: "pi", targetPath: "/tmp/pi/foo", linkedAt: "2026-07-03T00:00:00.000Z" } }
+    };
+    await stateStore.write(state);
+    await expect(stateStore.read()).resolves.toEqual(state);
   });
 });

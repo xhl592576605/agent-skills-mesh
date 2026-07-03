@@ -30,12 +30,13 @@ async function tempDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "asm-tui-plan-"));
 }
 
-function configWith(agentDir: string): AppConfig {
+function configWith(agentDir: string, sourcePath = path.dirname(agentDir)): AppConfig {
+  const home = path.join(agentDir, ".asm-home");
   return {
     version: 1,
     settings: { install_strategy: "symlink", default_agent: "pi", auto_refresh_on_start: true },
-    paths: { home: "", repos: "", local: "", cache: "" },
-    sources: [],
+    paths: { home, repos: path.join(home, "repos"), local: path.join(home, "local"), cache: path.join(home, "cache"), skills: path.join(home, "skills") },
+    sources: [{ id: "s1", name: "Source", type: "local-dir", path: sourcePath, enabled: true }],
     agents: { pi: { name: "Pi", enabled: true, skills_dir: agentDir } },
     skillOverrides: {}
   };
@@ -90,7 +91,7 @@ describe("useInstallPlan.buildReview", () => {
     const source = await tempDir();
     const agentDir = await tempDir();
     await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
-    const cfg = configWith(agentDir);
+    const cfg = configWith(agentDir, source);
     const idx = indexWith(skillRecord("foo", source));
 
     let refreshCalls = 0;
@@ -100,7 +101,7 @@ describe("useInstallPlan.buildReview", () => {
     expect(review.entries).toHaveLength(1);
     expect(review.entries[0].intent).toBe("install");
     expect(review.entries[0].plan.hasConflict).toBe(false);
-    expect(review.entries[0].plan.actions[0].type).toBe("create-symlink");
+    expect(review.entries[0].plan.actions.map((action) => action.type)).toEqual(["copy-to-ssot", "create-symlink", "update-state"]);
     expect(review.conflicts).toBe(0);
     expect(refreshCalls).toBe(0); // buildReview 不触发 refresh。
   });
@@ -110,7 +111,7 @@ describe("useInstallPlan.buildReview", () => {
     const agentDir = await tempDir();
     await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
     await fs.mkdir(path.join(agentDir, "foo")); // 真实目录 → conflict。
-    const cfg = configWith(agentDir);
+    const cfg = configWith(agentDir, source);
     const idx = indexWith(skillRecord("foo", source));
     const api = captureHook(() => useInstallPlan(async () => idx));
 
@@ -125,7 +126,7 @@ describe("useInstallPlan.applyAll", () => {
     const source = await tempDir();
     const agentDir = await tempDir();
     await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
-    const cfg = configWith(agentDir);
+    const cfg = configWith(agentDir, source);
     const idx = indexWith(skillRecord("foo", source));
     const refreshed: IndexFile = { ...idx, installations: { "foo:pi": installation("foo", "pi", "installed") } };
     let refreshCalls = 0;
@@ -145,7 +146,7 @@ describe("useInstallPlan.applyAll", () => {
     const agentDir = await tempDir();
     await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
     await fs.mkdir(path.join(agentDir, "foo")); // 真实目录 → conflict，apply 跳过。
-    const cfg = configWith(agentDir);
+    const cfg = configWith(agentDir, source);
     const idx = indexWith(skillRecord("foo", source));
     const api = captureHook(() => useInstallPlan(async () => idx));
 
@@ -165,7 +166,7 @@ describe("useInstallPlan.applyAll", () => {
     await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
     // 预置一个已安装 symlink（供 uninstall）。
     await fs.symlink(source, path.join(agentDir, "foo"), "dir");
-    const cfg = configWith(agentDir);
+    const cfg = configWith(agentDir, source);
     const idx = indexWith(skillRecord("foo", source));
     const api = captureHook(() => useInstallPlan(async () => idx));
 

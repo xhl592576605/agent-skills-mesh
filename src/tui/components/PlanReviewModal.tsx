@@ -12,8 +12,14 @@ export interface PlanReviewModalProps {
 /** 把单条 action 渲染为终端安全文本（符号/文字双重编码，不依赖颜色）。 */
 function formatAction(action: InstallAction): { label: string; conflict: boolean } {
   switch (action.type) {
+    case "copy-to-ssot":
+      return { label: `copy to SSOT → ${action.targetPath}`, conflict: false };
+    case "update-state":
+      return { label: `update state → ${action.record.skillName}`, conflict: false };
     case "create-symlink":
       return { label: `install → ${action.agentId}`, conflict: false };
+    case "remove-symlink":
+      return { label: `uninstall → ${action.agentId}`, conflict: false };
     case "skip":
       return { label: `skip ${action.agentId} (${action.reason})`, conflict: false };
     case "conflict":

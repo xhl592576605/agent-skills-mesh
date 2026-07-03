@@ -259,6 +259,104 @@ await fs.symlink(globalSkillDir, agentSkillDir, "dir");
 
 ---
 
+## Scenario: SSOT Installed Skill Management
+
+### 1. Scope / Trigger
+
+- Trigger: Agent Skills Mesh uses a strict SSOT installed-store model for managed skills.
+- Applies to: `src/core/models/state.ts`, `src/core/storage/state-store.ts`, `src/core/services/install-service.ts`, `src/core/services/ssot-service.ts`, `src/core/services/source-service.ts`, `src/core/services/discover-service.ts`, `src/core/services/skill-service.ts`, `src/core/scanners/skill-scanner.ts`, and CLI/TUI callers.
+- Required because install, import, adopt, uninstall, and source sync can write to ASM home and user-configured Agent skill directories.
+
+### 2. Signatures
+
+Core service signatures must keep state explicit:
+
+```ts
+refreshIndex(config: AppConfig, previous?: IndexFile, state?: StateFile): Promise<IndexFile>
+buildInstallPlan(config: AppConfig, index: IndexFile, skillName: string, agentId: string, state?: StateFile): Promise<InstallPlan>
+applyInstallPlan(plan: InstallPlan, stateStore?: StateStore): Promise<void>
+buildUninstallPlan(config: AppConfig, skillName: string, agentId: string, state?: StateFile): Promise<UninstallPlan>
+applyUninstallPlan(plan: UninstallPlan, stateStore?: StateStore): Promise<void>
+syncSources(configStore: ConfigStore, sourceId?: string, stateStore?: StateStore): Promise<SyncResult[]>
+importSkillToSsot(configStore: ConfigStore, stateStore: StateStore, dirPath: string): Promise<InstalledSkillRecord>
+adoptSkill(configStore: ConfigStore, indexStore: IndexStore, skillName: string, stateStore?: StateStore): Promise<AdoptResult>
+```
+
+Install actions must distinguish side effects explicitly:
+
+```ts
+{ type: "copy-to-ssot"; sourcePath: string; targetPath: string; replace: boolean }
+{ type: "create-symlink"; agentId: string; targetPath: string; linkTarget: string }
+{ type: "remove-symlink"; agentId: string; targetPath: string }
+{ type: "update-state"; record: InstalledSkillRecord; agentId?: string; removeAgentId?: string }
+```
+
+### 3. Contracts
+
+- ASM-managed installed skill contents live under `config.paths.skills` (default `~/.agent-skills-mesh/skills`).
+- Configured sources (`local-dir`, `single-skill`, `git-repo`) are discovery/update inputs only; the SSOT installed store is not a normal discover source.
+- Agent skill directories are symlink-only distribution zones for ASM-managed skills. Managed symlinks must point to the SSOT path, not a source repo or local candidate path.
+- `state.json` is the source of installed-state truth: `ssotPath`, source metadata, `contentHash`, timestamps, and `enabledAgents`.
+- `config.toml` remains user intent; `index.json` remains generated scan facts. Do not persist installed-state truth in config or index.
+- Skill names used for filesystem paths must pass `assertSafeSkillName`: no path separators, whitespace, control/format characters, `.` or `..`.
+- Any state-derived or user-derived filesystem target must pass containment checks before writing:
+  - SSOT paths stay inside `config.paths.skills`.
+  - Agent target paths equal the configured agent `skills_dir/<skillName>`.
+  - Source sync relative paths stay inside the configured source root.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| `SKILL.md` frontmatter `name` contains `/`, `\\`, whitespace, control/format characters, `.` or `..` | Reject before creating candidates, state records, SSOT directories, or symlinks |
+| SSOT target exists but no installed state record exists | Install plan is conflict; do not overwrite |
+| Install target is missing | Copy candidate to SSOT, create symlink to SSOT, update state |
+| Install target is same SSOT symlink | Skip symlink creation and keep/update state |
+| Install target is different symlink, real directory, or file | Plan conflict; do not overwrite |
+| Second agent installs same skill | Reuse existing SSOT content; create only the second agent symlink and update `enabledAgents` |
+| Uninstall managed skill for one agent | Remove only that agent symlink and remove that `enabledAgents` entry; keep SSOT content |
+| `source sync` fast-forwards and installed source hash changed | Safely replace SSOT content, update state hash/timestamps, repair enabled SSOT symlinks |
+| `source sync` is non-fast-forward or pull fails | Do not touch SSOT content or installed state |
+| State record contains SSOT path outside `config.paths.skills` | Report conflict/error; do not copy or symlink |
+| State record contains unknown agent or mismatched target path | Report conflict; do not create arbitrary symlinks |
+| Agent real skill directory is adopted | Move real directory into SSOT, replace original path with symlink to SSOT, write installed state |
+
+### 5. Good/Base/Bad Cases
+
+- Good: `asm install foo --agent pi` copies `source/foo` to `$ASM_HOME/skills/foo`, creates `pi-skills/foo -> $ASM_HOME/skills/foo`, and records `enabledAgents.pi` in `state.json`.
+- Base: `asm uninstall foo --agent pi` removes only `pi-skills/foo`; `$ASM_HOME/skills/foo` remains for other agents or future re-enable.
+- Bad: `pi-skills/foo -> $ASM_HOME/repos/repo/foo`, because the agent view now points to a source candidate instead of the SSOT installed store.
+- Bad: accepting `name: ../escape` from frontmatter and using it in `path.join(config.paths.skills, skillName)`.
+
+### 6. Tests Required
+
+- State-store round-trip for `InstalledSkillRecord` and `enabledAgents`.
+- Install tests for SSOT copy, symlink target, repeated install skip, second agent reuse, real-dir conflicts, and stale SSOT-without-state conflict.
+- Uninstall tests asserting `remove-symlink` action and SSOT content preservation.
+- Source sync tests for fast-forward update, `.claude-plugin` hash changes, non-fast-forward no-op, and per-skill conflict isolation.
+- Scanner/import/install tests rejecting unsafe skill names and path traversal.
+- Refresh tests asserting the SSOT installed store is not surfaced as a normal candidate and state-installed skills remain visible when source candidates are missing.
+- CLI smoke tests must set temporary `ASM_HOME` and all enabled Agent `skills_dir` values to temporary directories.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const ssotPath = path.join(config.paths.skills, skillName);
+await fs.symlink(candidate.path, agentTarget, "dir");
+```
+
+#### Correct
+
+```ts
+const ssotPath = getSsotSkillPath(config, skillName); // validates name + containment
+await copySkillDirToSsot(candidate.path, ssotPath, { replace: false });
+await fs.symlink(ssotPath, safeJoin(agentSkillsDir, skillName, "agent skill path"), "dir");
+```
+
+---
+
 ## Forbidden Patterns
 
 - Do not silently overwrite user config, index files, existing skill directories, or existing non-matching symlinks.

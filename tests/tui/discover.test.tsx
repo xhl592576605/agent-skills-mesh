@@ -12,6 +12,7 @@ import type { SkillCandidate, SkillRecord, SkillStatus } from "../../src/core/mo
 import { refreshIndex } from "../../src/core/services/refresh-service.js";
 import { ConfigStore } from "../../src/core/storage/config-store.js";
 import { IndexStore } from "../../src/core/storage/index-store.js";
+import { StateStore } from "../../src/core/storage/state-store.js";
 import { DiscoverScreen } from "../../src/tui/screens/DiscoverScreen.js";
 import { createInitialState, reducer } from "../../src/tui/state/reducer.js";
 import type { TuiAction } from "../../src/tui/state/types.js";
@@ -53,7 +54,7 @@ function staticConfig(): AppConfig {
   return {
     version: 1,
     settings: { install_strategy: "symlink", default_agent: "pi", auto_refresh_on_start: true },
-    paths: { home: "", repos: "", local: "", cache: "" },
+    paths: { home: os.tmpdir(), repos: path.join(os.tmpdir(), "repos"), local: path.join(os.tmpdir(), "local"), cache: path.join(os.tmpdir(), "cache"), skills: path.join(os.tmpdir(), "skills") },
     sources: [],
     agents: { pi: { name: "Pi", enabled: true, skills_dir: "/tmp/pi-skills" } },
     skillOverrides: {}
@@ -201,14 +202,17 @@ describe("DiscoverScreen adopt (real services)", () => {
 
     const configStore = new ConfigStore(home);
     const indexStore = new IndexStore(home);
+    const stateStore = new StateStore(home);
     const config = await configStore.init();
-    config.sources = [{ id: "global", name: "Global", type: "global-dir", path: globalDir, enabled: true, readonly: false }];
+    config.paths = { home, repos: path.join(home, "repos"), local: path.join(home, "local"), cache: path.join(home, "cache"), skills: globalDir };
+    config.sources = [];
     config.agents = { pi: { name: "Pi", enabled: true, skills_dir: agentDir } };
     config.skillOverrides = {};
     await configStore.write(config);
 
     await writeSkill(path.join(agentDir, "my-helper"), "my-helper");
-    let index = await refreshIndex(config, await indexStore.read());
+    await stateStore.init({ force: true });
+    let index = await refreshIndex(config, await indexStore.read(), await stateStore.read());
     await indexStore.write(index);
     expect(index.skills["my-helper"].status).toBe("discovered");
 

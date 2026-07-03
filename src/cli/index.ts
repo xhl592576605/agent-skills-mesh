@@ -2,13 +2,15 @@
 import { cac } from "cac";
 import { ConfigStore } from "../core/storage/config-store.js";
 import { IndexStore } from "../core/storage/index-store.js";
+import { StateStore } from "../core/storage/state-store.js";
 import { refreshIndex } from "../core/services/refresh-service.js";
 import { applyInstallPlan, applyUninstallPlan, buildInstallPlan, buildUninstallPlan } from "../core/services/install-service.js";
 import { runDoctor } from "../core/services/doctor-service.js";
 import { addRepoSource, addSource, listSources, removeSource, setSourceEnabled, syncSources } from "../core/services/source-service.js";
-import { addSingleSkill, importSkill, preferSkill, searchSkills } from "../core/services/skill-service.js";
+import { addSingleSkill, importSkillToSsot, preferSkill, searchSkills } from "../core/services/skill-service.js";
 import { formatSkillRows } from "./skill-format.js";
 import type { SkillRecord } from "../core/models/skill.js";
+import type { InstallAction } from "../core/models/install-plan.js";
 import { adoptSkill, listDiscover, setIgnored } from "../core/services/discover-service.js";
 
 const cli = cac("asm");
@@ -18,14 +20,16 @@ cli.command("init", "Initialize Agent Skills Mesh home")
   .action(async (options: { force?: boolean }) => {
     const configStore = new ConfigStore();
     const indexStore = new IndexStore(configStore.home);
+    const stateStore = new StateStore(configStore.home);
     await configStore.init({ force: options.force });
     await indexStore.init({ force: options.force });
+    await stateStore.init({ force: options.force });
     console.log(`Initialized ${configStore.home}`);
   });
 
 cli.command("refresh", "Scan sources and update index").action(async () => {
-  const { configStore, indexStore, config, index } = await loadStores();
-  const next = await refreshIndex(config, index);
+  const { configStore, indexStore, config, index, state } = await loadStores();
+  const next = await refreshIndex(config, index, state);
   await indexStore.write(next);
   console.log(`Refreshed ${Object.keys(next.skills).length} skills from ${Object.keys(next.sources).length} sources`);
   void configStore;
@@ -53,7 +57,7 @@ cli.command("skill <subcommand> [name]", "Skill commands: list, search, info, ad
     }
     if (subcommand === "info") {
       if (!name) throw new Error("Usage: asm skill info <name>");
-      const { index } = await loadStores();
+      const { index, state } = await loadStores();
       const item = index.skills[name];
       if (!item) throw new Error(`Skill not found: ${name}`);
       console.log(`Name: ${item.name}`);
@@ -62,6 +66,12 @@ cli.command("skill <subcommand> [name]", "Skill commands: list, search, info, ad
       if (item.preferredSourceId) console.log(`Preferred source: ${item.preferredSourceId}`);
       console.log("Candidates:");
       for (const candidate of item.candidates) console.log(`- ${candidate.id}\n  source: ${candidate.sourceId} (${candidate.sourceType})\n  path: ${candidate.path}\n  description: ${candidate.description ?? ""}`);
+      const installed = state.installedSkills[item.name];
+      if (installed) {
+        console.log(`SSOT: ${installed.ssotPath}`);
+        console.log(`Content hash: ${installed.contentHash}`);
+        console.log(`Enabled agents: ${Object.keys(installed.enabledAgents).join(", ") || "none"}`);
+      }
       console.log("Installations:");
       for (const installation of Object.values(index.installations).filter((record) => record.skillName === item.name)) console.log(`- ${installation.agentId}: ${installation.status} ${installation.targetPath}${installation.reason ? ` (${installation.reason})` : ""}`);
       return;
@@ -76,17 +86,17 @@ cli.command("skill <subcommand> [name]", "Skill commands: list, search, info, ad
     }
     if (subcommand === "import") {
       if (!name) throw new Error("Usage: asm skill import <path>");
-      const { configStore } = await loadStores();
-      const source = await importSkill(configStore, name, { id: options.id });
-      console.log(`Imported skill source ${source.id} -> ${source.path}`);
-      console.log("Run `asm refresh` to index this skill.");
+      const { configStore, stateStore } = await loadStores();
+      const record = await importSkillToSsot(configStore, stateStore, name);
+      console.log(`Imported skill to SSOT ${record.skillName} -> ${record.ssotPath}`);
+      console.log("Run `asm refresh` to update the index.");
       return;
     }
     if (subcommand === "prefer") {
       if (!name) throw new Error("Usage: asm skill prefer <name> --source <id>");
       if (!options.source) throw new Error("Missing required option: --source <id>");
-      const { configStore, indexStore, config, index } = await loadStores();
-      const fresh = await refreshIndex(config, index);
+      const { configStore, indexStore, config, index, state } = await loadStores();
+      const fresh = await refreshIndex(config, index, state);
       await indexStore.write(fresh);
       await preferSkill(configStore, indexStore, name, options.source);
       console.log(`Preferred source for ${name}: ${options.source}`);
@@ -100,12 +110,12 @@ cli.command("install <skillName>", "Install skill for an agent")
   .option("--agent <agent>", "Agent id")
   .option("--dry-run", "Only print install plan")
   .action(async (skillName: string, options: { agent?: string; dryRun?: boolean }) => {
-    const { config, index } = await loadStores();
+    const { config, index, state, stateStore } = await loadStores();
     const agentId = options.agent ?? config.settings.default_agent;
-    const plan = await buildInstallPlan(config, index, skillName, agentId);
+    const plan = await buildInstallPlan(config, index, skillName, agentId, state);
     printPlan(plan.actions, plan.hasConflict);
     if (options.dryRun) return;
-    await applyInstallPlan(plan);
+    await applyInstallPlan(plan, stateStore);
     console.log("Install applied");
   });
 
@@ -113,12 +123,12 @@ cli.command("uninstall <skillName>", "Uninstall skill symlink for an agent")
   .option("--agent <agent>", "Agent id")
   .option("--dry-run", "Only print uninstall plan")
   .action(async (skillName: string, options: { agent?: string; dryRun?: boolean }) => {
-    const { config } = await loadStores();
+    const { config, state, stateStore } = await loadStores();
     const agentId = options.agent ?? config.settings.default_agent;
-    const plan = await buildUninstallPlan(config, skillName, agentId);
+    const plan = await buildUninstallPlan(config, skillName, agentId, state);
     printPlan(plan.actions, plan.hasConflict);
     if (options.dryRun) return;
-    await applyUninstallPlan(plan);
+    await applyUninstallPlan(plan, stateStore);
     console.log("Uninstall applied");
   });
 
@@ -157,17 +167,23 @@ cli.command("source <subcommand> [arg]", "Source commands: list, add, add-repo, 
       return;
     }
     if (subcommand === "sync") {
-      const { configStore } = await loadStores();
-      const results = await syncSources(configStore, arg);
+      const { configStore, indexStore, stateStore, config, index } = await loadStores();
+      const results = await syncSources(configStore, arg, stateStore);
       if (!results.length) {
         console.log("No git-repo sources to sync.");
         return;
       }
       for (const result of results) {
         const status = result.success ? "ok" : `failed${result.error ? `: ${result.error}` : ""}`;
-        console.log(`${result.sourceId}\t${result.action}\t${status}`);
+        const details = [
+          result.updatedSkills?.length ? `updated=${result.updatedSkills.join(",")}` : "",
+          result.conflicts?.length ? `conflicts=${result.conflicts.length}` : ""
+        ].filter(Boolean).join("\t");
+        console.log(`${result.sourceId}\t${result.action}\t${status}${details ? `\t${details}` : ""}`);
       }
-      console.log("Run `asm refresh` to update the index.");
+      const refreshed = await refreshIndex(config, index, await stateStore.read());
+      await indexStore.write(refreshed);
+      console.log(`Refreshed ${Object.keys(refreshed.skills).length} skills after sync.`);
       return;
     }
     if (subcommand === "remove") {
@@ -204,22 +220,22 @@ cli.command("discover", "List discovered, external, broken-link, and conflict it
   for (const entry of entries) console.log(`${entry.kind}\t${entry.skillName}\t${entry.detail}`);
 });
 
-cli.command("adopt <skill>", "Move a discovered skill into the global source and symlink it back").action(async (skill: string) => {
-  const { configStore, indexStore } = await loadStores();
-  const result = await adoptSkill(configStore, indexStore, skill);
+cli.command("adopt <skill>", "Import a discovered skill into SSOT and symlink it back").action(async (skill: string) => {
+  const { configStore, indexStore, stateStore } = await loadStores();
+  const result = await adoptSkill(configStore, indexStore, skill, stateStore);
   console.log(`Adopted ${result.skillName}: ${result.sourcePath} -> ${result.targetPath}`);
   if (result.sourcePath !== result.targetPath) console.log(`Reinstalled symlink at ${result.sourcePath}`);
 });
 
 cli.command("ignore <skill>", "Ignore a discoverable skill").action(async (skill: string) => {
-  const { configStore, indexStore } = await loadStores();
-  await setIgnored(configStore, indexStore, skill, true);
+  const { configStore, indexStore, stateStore } = await loadStores();
+  await setIgnored(configStore, indexStore, skill, true, stateStore);
   console.log(`Ignored ${skill}`);
 });
 
 cli.command("unignore <skill>", "Stop ignoring a skill").action(async (skill: string) => {
-  const { configStore, indexStore } = await loadStores();
-  await setIgnored(configStore, indexStore, skill, false);
+  const { configStore, indexStore, stateStore } = await loadStores();
+  await setIgnored(configStore, indexStore, skill, false, stateStore);
   console.log(`Unignored ${skill}`);
 });
 
@@ -256,17 +272,24 @@ cli.parse();
 async function loadStores() {
   const configStore = new ConfigStore();
   const indexStore = new IndexStore(configStore.home);
+  const stateStore = new StateStore(configStore.home);
   if (!(await configStore.exists())) throw new Error("config.toml not found. Run `asm init` first.");
   const config = await configStore.read();
   const index = await indexStore.read();
-  return { configStore, indexStore, config, index };
+  const state = await stateStore.read();
+  return { configStore, indexStore, stateStore, config, index, state };
 }
 
-function printPlan(actions: Array<{ type: string; agentId: string; targetPath?: string; reason?: string; linkTarget?: string }>, hasConflict: boolean): void {
+function printPlan(actions: InstallAction[], hasConflict: boolean): void {
   console.log(hasConflict ? "Plan has conflicts:" : "Plan:");
   for (const action of actions) {
     if (action.type === "create-symlink") console.log(`- create symlink [${action.agentId}] ${action.targetPath} -> ${action.linkTarget}`);
-    else console.log(`- ${action.type} [${action.agentId}] ${action.targetPath ?? ""} ${action.reason ?? ""}`.trim());
+    else if (action.type === "copy-to-ssot") console.log(`- copy to SSOT ${action.sourcePath} -> ${action.targetPath}`);
+    else if (action.type === "update-state") console.log(`- update state ${action.record.skillName}`);
+    else if (action.type === "remove-symlink") console.log(`- remove symlink [${action.agentId}] ${action.targetPath}`);
+    else if (action.type === "skip") console.log(`- skip [${action.agentId}] ${action.targetPath ?? ""} ${action.reason}`.trim());
+    else if (action.type === "conflict") console.log(`- conflict [${action.agentId}] ${action.targetPath} ${action.reason}`.trim());
+    else console.log(`- repair-broken-link [${action.agentId}] ${action.targetPath}`);
   }
 }
 

@@ -2,15 +2,23 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { AppConfig, SourceConfig } from "../models/config.js";
 import { ConfigStore } from "../storage/config-store.js";
+import type { StateStore } from "../storage/state-store.js";
+import type { StateFile } from "../models/state.js";
 import { ensureDir, pathExists, removeRecursive } from "../../utils/fs.js";
 import { resolveConfiguredPath, toPosixId } from "../../utils/path.js";
 import { gitClone, gitPullFfOnly } from "../../utils/git.js";
+import { sha256Directory } from "../../utils/hash.js";
+import { copySkillDirToSsot, ensureSymlinkToSsot, getSsotRoot, readSkillMetadata } from "./ssot-service.js";
+import { assertPathInside, assertSafeSkillName, safeJoin } from "../../utils/safe-path.js";
 
 export interface SyncResult {
   sourceId: string;
   action: "clone" | "pull";
   success: boolean;
   error?: string;
+  updatedSkills?: string[];
+  skippedSkills?: string[];
+  conflicts?: string[];
 }
 
 /** 取 path 或 git url（含 scp 语法 `host:x/y`）的最后一段，保留原大小写。 */
@@ -99,7 +107,7 @@ export async function addRepoSource(configStore: ConfigStore, gitUrl: string, op
 }
 
 /** 同步 git-repo source：clone 目录缺失则 clone，存在则 `pull --ff-only`。无 id 时遍历所有 enabled git-repo。 */
-export async function syncSources(configStore: ConfigStore, sourceId?: string): Promise<SyncResult[]> {
+export async function syncSources(configStore: ConfigStore, sourceId?: string, stateStore?: StateStore): Promise<SyncResult[]> {
   const config = await configStore.read();
   const targets: SourceConfig[] = [];
   if (sourceId) {
@@ -112,7 +120,14 @@ export async function syncSources(configStore: ConfigStore, sourceId?: string): 
 
   const results: SyncResult[] = [];
   for (const source of targets) {
-    results.push(await syncOne(source));
+    const result = await syncOne(source);
+    if (result.success && stateStore) {
+      const updateResult = await updateInstalledForSource(config, await stateStore.read(), source, stateStore);
+      result.updatedSkills = updateResult.updated;
+      result.skippedSkills = updateResult.skipped;
+      result.conflicts = updateResult.conflicts;
+    }
+    results.push(result);
   }
   return results;
 }
@@ -177,6 +192,61 @@ async function syncOne(source: SourceConfig): Promise<SyncResult> {
   } catch (error) {
     return { sourceId: source.id, action: "pull", success: false, error: errorMessage(error) };
   }
+}
+
+async function updateInstalledForSource(config: AppConfig, state: StateFile, source: SourceConfig, stateStore: StateStore): Promise<{ updated: string[]; skipped: string[]; conflicts: string[] }> {
+  const updated: string[] = [];
+  const skipped: string[] = [];
+  const conflicts: string[] = [];
+  for (const record of Object.values(state.installedSkills)) {
+    if (record.source.kind !== "configured-source" || record.source.sourceId !== source.id) continue;
+    try {
+      assertSafeSkillName(record.skillName);
+      assertPathInside(getSsotRoot(config), record.ssotPath, "installed SSOT path");
+      const sourceRoot = resolveConfiguredPath(source.path);
+      const relative = record.source.relativePath === "." ? "" : record.source.relativePath;
+      const sourceSkillDir = path.join(sourceRoot, relative);
+      assertPathInside(sourceRoot, sourceSkillDir, "source skill path");
+      if (!(await pathExists(path.join(sourceSkillDir, "SKILL.md")))) {
+        skipped.push(`${record.skillName}: source skill missing`);
+        continue;
+      }
+
+      const nextHash = await sha256Directory(sourceSkillDir);
+      if (nextHash === record.contentHash) {
+        skipped.push(`${record.skillName}: up-to-date`);
+      } else {
+        await copySkillDirToSsot(sourceSkillDir, record.ssotPath, { replace: true });
+        const metadata = await readSkillMetadata(record.ssotPath, record.skillName);
+        record.displayName = metadata.displayName;
+        record.description = metadata.description;
+        record.tags = metadata.tags;
+        record.contentHash = await sha256Directory(record.ssotPath);
+        record.updatedAt = new Date().toISOString();
+        updated.push(record.skillName);
+        await stateStore.write(state);
+      }
+
+      for (const agentRecord of Object.values(record.enabledAgents)) {
+        const agent = config.agents[agentRecord.agentId];
+        if (!agent) {
+          conflicts.push(`${record.skillName}:${agentRecord.agentId}: unknown agent`);
+          continue;
+        }
+        const expectedTargetPath = safeJoin(resolveConfiguredPath(agent.skills_dir), record.skillName, "agent skill path");
+        if (path.resolve(agentRecord.targetPath) !== path.resolve(expectedTargetPath)) {
+          conflicts.push(`${record.skillName}:${agentRecord.agentId}: state target path does not match agent skill path`);
+          continue;
+        }
+        const result = await ensureSymlinkToSsot(expectedTargetPath, record.ssotPath);
+        if (result.status === "conflict") conflicts.push(`${record.skillName}:${agentRecord.agentId}: ${result.reason}`);
+      }
+    } catch (error) {
+      conflicts.push(`${record.skillName}: ${errorMessage(error)}`);
+    }
+  }
+
+  return { updated, skipped, conflicts };
 }
 
 async function safeCleanup(target: string): Promise<void> {

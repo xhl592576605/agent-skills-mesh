@@ -12,7 +12,7 @@ Current persistence files are:
 
 - `config.toml` managed by `src/core/storage/config-store.ts`.
 - `index.json` managed by `src/core/storage/index-store.ts`.
-- `state.json` created during `ConfigStore.init()` in `src/core/storage/config-store.ts`.
+- `state.json` managed by `src/core/storage/state-store.ts` and initialized by `ConfigStore.init()`.
 
 Reference examples:
 
@@ -27,6 +27,7 @@ Reference examples:
 
 - Treat `config.toml` as user intent: sources, agents, settings, and paths.
 - Treat `index.json` as generated scan state: sources snapshot, skills, installations, and issues.
+- Treat `state.json` as installed-state truth: installed skill source metadata, SSOT path, content hash, timestamps, and enabled agent symlink records.
 - Do not add ad-hoc persistence from CLI handlers. Add storage behavior under `src/core/storage/**` and keep callers typed.
 - Resolve `~/.agent-skills-mesh` through `resolveConfiguredPath()` / `getAsmHome()` in `src/utils/path.ts`; this preserves `ASM_HOME` override behavior.
 
@@ -38,13 +39,14 @@ There are no database queries. Current read patterns are file-based:
 
 - `ConfigStore.read()` reads and parses the whole TOML file.
 - `IndexStore.read()` reads and parses the whole JSON index, returning `createEmptyIndex()` if the file is missing.
-- Services receive typed `AppConfig` and `IndexFile` objects rather than reaching into storage directly.
+- `StateStore.read()` reads and parses the installed state JSON, returning `createEmptyState()` if the file is missing.
+- Services receive typed `AppConfig`, `IndexFile`, and `StateFile` objects rather than reaching into storage directly.
 
 Follow the service boundary shown by:
 
 - `src/cli/index.ts` `loadStores()` reads stores once and passes typed objects to services.
-- `src/core/services/refresh-service.ts` derives the next `IndexFile` from config, previous index, scanners, and installation detection.
-- `src/core/services/install-service.ts` builds install/uninstall plans from typed config/index input.
+- `src/core/services/refresh-service.ts` derives the next `IndexFile` from config, previous index, state, scanners, and installation detection.
+- `src/core/services/install-service.ts` builds install/uninstall plans from typed config/index/state input.
 
 ---
 

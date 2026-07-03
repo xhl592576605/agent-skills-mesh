@@ -1,5 +1,10 @@
+import type { InstalledSkillRecord } from "./state.js";
+
 export type InstallAction =
+  | { type: "copy-to-ssot"; sourcePath: string; targetPath: string; replace: boolean }
+  | { type: "update-state"; record: InstalledSkillRecord; agentId?: string; removeAgentId?: string }
   | { type: "create-symlink"; agentId: string; targetPath: string; linkTarget: string }
+  | { type: "remove-symlink"; agentId: string; targetPath: string }
   | { type: "skip"; agentId: string; reason: string; targetPath?: string }
   | { type: "conflict"; agentId: string; targetPath: string; reason: string }
   | { type: "repair-broken-link"; agentId: string; targetPath: string; oldTarget: string; newTarget: string };
