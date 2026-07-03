@@ -208,3 +208,39 @@ Implemented strict ASM private SSOT skill installs with state.json, SSOT symlink
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 重构 ASM CLI 为三层命令模型（service 层 + commander + 测试 + spec）
+
+**Date**: 2026-07-03
+**Task**: 重构 ASM CLI 为三层命令模型（service 层 + commander + 测试 + spec）
+**Branch**: `main`
+
+### Summary
+
+完成 cli-command-redesign 任务：三层命令骨架（source add/update/remove/list/enable/disable、skill search/add/list/info/update/remove/rebind/enable/disable、init/refresh/doctor/tui）。模型精简 R11——删 SkillOverride/[skill-overrides]/preferred*/ignored/index.sources 镜像/installedCandidateId；SkillStatus 加 orphan；index.installations 重定位为 state.enabledAgents 的 symlink 健康投影；refreshIndex 去 previous 参数（可重建缓存）。cac→commander 原生嵌套子命令（每子命令独立 help）。两步分离更新（sourceUpdate 只报告 + skillUpdate 显式替换 SSOT，orphan 失败）。source add 三合一 --type 推断 + 孤儿自动探测 rebind；remove 默认保留孤儿/--purge 级联；skill add/rebind/remove；enable/disable 复用 install/uninstall plan。doctor 承担 discover（遍历 index.issues + external）。测试重写 6 文件（77 passed，TUI 13 excluded 待 07-03-tui-redesign）。经多轮 trellis-check review（路径 containment/hash 预检/index-staleness/共享 detachAgentSymlinks）。typecheck + test 全绿。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d60e5ee` | (see git log) |
+| `4d1d65c` | (see git log) |
+| `fde0fa8` | (see git log) |
+| `bb39949` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
