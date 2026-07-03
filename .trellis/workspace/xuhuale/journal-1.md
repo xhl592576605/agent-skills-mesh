@@ -175,3 +175,36 @@ Implemented the Ink/React TUI MVP: Matrix (skill x agent grid, per-cell toggle +
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: SSOT skill management
+
+**Date**: 2026-07-03
+**Task**: SSOT skill management
+**Branch**: `main`
+
+### Summary
+
+Implemented strict ASM private SSOT skill installs with state.json, SSOT symlink distribution, source sync auto-update, import/adopt changes, path safety checks, tests, and backend specs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ade8603` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
