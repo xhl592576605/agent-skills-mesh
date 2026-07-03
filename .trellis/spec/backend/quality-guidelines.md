@@ -27,8 +27,8 @@ asm init [--force]
 asm refresh
 asm skill list
 asm skill info <name>
-asm install <skill> --agent <agent> [--dry-run]
-asm uninstall <skill> --agent <agent> [--dry-run]
+asm skill enable <name> --agent <agent>
+asm skill disable <name> --agent <agent>
 asm doctor
 ```
 
@@ -37,11 +37,11 @@ Core service signatures should keep side effects explicit:
 ```ts
 ConfigStore.init(options?: { force?: boolean }): Promise<AppConfig>
 IndexStore.init(options?: { force?: boolean }): Promise<IndexFile>
-refreshIndex(config: AppConfig, previous: IndexFile): Promise<IndexFile>
-buildInstallPlan(config: AppConfig, index: IndexFile, skillName: string, agentId: string): Promise<InstallPlan>
-applyInstallPlan(plan: InstallPlan): Promise<void>
-buildUninstallPlan(config: AppConfig, skillName: string, agentId: string): Promise<UninstallPlan>
-applyUninstallPlan(plan: UninstallPlan): Promise<void>
+refreshIndex(config: AppConfig, state?: StateFile): Promise<IndexFile>
+buildInstallPlan(config: AppConfig, index: IndexFile, skillName: string, agentId: string, state?: StateFile): Promise<InstallPlan>
+applyInstallPlan(plan: InstallPlan, stateStore?: StateStore): Promise<void>
+buildUninstallPlan(config: AppConfig, skillName: string, agentId: string, state?: StateFile): Promise<UninstallPlan>
+applyUninstallPlan(plan: UninstallPlan, stateStore?: StateStore): Promise<void>
 ```
 
 ### 3. Contracts
@@ -116,7 +116,9 @@ node dist/cli/index.js install foo --agent pi
 
 ---
 
-## Scenario: Source Management, Skill Overrides, and Discover Adoption
+## Scenario: Three-Layer Command Model (Source / Skill / Agent)
+
+> **Migrated (`07-03-cli-command-redesign`)**: ASM CLI reorganized into three layers — `source add/update/remove/list/enable/disable`, `skill search/add/list/info/update/remove/rebind/enable/disable` (commander nested subcommands). Old top-level commands (`install`/`uninstall`/`add-repo`/`sync`/`discover`/`adopt`/`ignore`/`prefer`/`import`) and `[skill-overrides]` config removed; `index.json` slimmed (no `sources` mirror / override-derived fields; `SkillStatus` adds `orphan`). Storage split: `config.toml`=intent, `state.json`=SSOT truth, `index.json`=rebuildable cache. Two-step update: `source update` only reports updatable; `skill update` explicitly replaces SSOT. The signatures/contracts below are **legacy** and partially superseded — see the task `design.md` command tree and `src/cli/index.ts` + service files for the current truth until the next full spec sync.
 
 ### 1. Scope / Trigger
 
@@ -272,14 +274,16 @@ await fs.symlink(globalSkillDir, agentSkillDir, "dir");
 Core service signatures must keep state explicit:
 
 ```ts
-refreshIndex(config: AppConfig, previous?: IndexFile, state?: StateFile): Promise<IndexFile>
+refreshIndex(config: AppConfig, state?: StateFile): Promise<IndexFile>
 buildInstallPlan(config: AppConfig, index: IndexFile, skillName: string, agentId: string, state?: StateFile): Promise<InstallPlan>
 applyInstallPlan(plan: InstallPlan, stateStore?: StateStore): Promise<void>
 buildUninstallPlan(config: AppConfig, skillName: string, agentId: string, state?: StateFile): Promise<UninstallPlan>
 applyUninstallPlan(plan: UninstallPlan, stateStore?: StateStore): Promise<void>
-syncSources(configStore: ConfigStore, sourceId?: string, stateStore?: StateStore): Promise<SyncResult[]>
-importSkillToSsot(configStore: ConfigStore, stateStore: StateStore, dirPath: string): Promise<InstalledSkillRecord>
-adoptSkill(configStore: ConfigStore, indexStore: IndexStore, skillName: string, stateStore?: StateStore): Promise<AdoptResult>
+sourceUpdate(configStore: ConfigStore, stateStore: StateStore, sourceId?: string): Promise<SourceUpdateReport[]>   // two-step: reports updatable, does NOT touch SSOT
+skillUpdate(configStore: ConfigStore, stateStore: StateStore, target: string): Promise<SkillUpdateReport[]>   // target = name | "--all"; explicitly replaces SSOT; fails for orphan
+skillAdd(configStore: ConfigStore, stateStore: StateStore, index: IndexFile, name: string, options?: { source?: string }): Promise<InstalledSkillRecord>
+skillRebind(configStore: ConfigStore, stateStore: StateStore, index: IndexFile, name: string, sourceId: string): Promise<void>
+skillRemove(configStore: ConfigStore, stateStore: StateStore, name: string): Promise<void>
 ```
 
 Install actions must distinguish side effects explicitly:
