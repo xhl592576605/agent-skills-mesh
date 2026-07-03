@@ -1,20 +1,11 @@
-import { useState } from "react";
-import { adoptSkill, listDiscover, setIgnored } from "../../core/services/discover-service.js";
+import { listDiscover } from "../../core/services/discover-service.js";
 import type { DiscoverEntry } from "../../core/services/discover-service.js";
-import { ConfigStore } from "../../core/storage/config-store.js";
-import { IndexStore } from "../../core/storage/index-store.js";
 import type { IndexFile } from "../../core/models/index.js";
 
 export interface UseDiscoverInput {
   /** 当前快照的 index（派生 discover 条目的数据源）。 */
   readonly index: IndexFile;
-  /**
-   * adopt/ignore 完成后由 App 触发「重新读取 config+index」。
-   *
-   * 复用 useIndexState.reload（与 useIndexState 构造同一 home 的 store）：service 已把
-   * config.toml + index.json 写到磁盘，reload 重新读取即可让 App effect 回写 SET_SNAPSHOT，
-   * 各屏据此重算（含 config 的 skillOverrides 变更，避免 refresh 闭包用到过期 config）。
-   */
+  /** 预留：交互完成后由 App 触发重新读取（当前 adopt/ignore 已禁用，未使用）。 */
   readonly reload: () => Promise<void>;
 }
 
@@ -28,30 +19,16 @@ export interface UseDiscoverResult {
 /**
  * Discover 屏的域行为封装（.ts，无 JSX）。
  *
- * 组件只渲染条目 + 收集按键意图；adopt/ignore 全部走 service（写 config.toml + index.json），
- * 完成后 reload 让 App 单一数据源更新。本 hook 不复制扫描/adopt/ignore 逻辑。
+ * CLI 重构后 adopt/ignore 语义由 `asm doctor` + `asm skill enable/disable` 流程替代；
+ * 此处仅保留 entries 投影与接口签名以维持 DiscoverScreen 编译，实际交互将在
+ * `07-03-tui-redesign` 任务中随四屏重设计一并处理。
  */
-export function useDiscover({ index, reload }: UseDiscoverInput): UseDiscoverResult {
-  // stores 与 useIndexState 同 home（getAsmHome，受 ASM_HOME 影响），按需构造且渲染期稳定。
-  const [configStore] = useState(() => new ConfigStore());
-  const [indexStore] = useState(() => new IndexStore(configStore.home));
-
+export function useDiscover({ index }: UseDiscoverInput): UseDiscoverResult {
   const entries = listDiscover(index);
 
-  const adopt = async (skillName: string): Promise<void> => {
-    await adoptSkill(configStore, indexStore, skillName);
-    await reload();
+  const unsupported = async (): Promise<void> => {
+    throw new Error("adopt/ignore is disabled; use `asm doctor` and `asm skill enable/disable` instead");
   };
 
-  const ignore = async (skillName: string): Promise<void> => {
-    await setIgnored(configStore, indexStore, skillName, true);
-    await reload();
-  };
-
-  const unignore = async (skillName: string): Promise<void> => {
-    await setIgnored(configStore, indexStore, skillName, false);
-    await reload();
-  };
-
-  return { entries, adopt, ignore, unignore };
+  return { entries, adopt: unsupported, ignore: unsupported, unignore: unsupported };
 }

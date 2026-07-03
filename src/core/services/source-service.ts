@@ -3,13 +3,16 @@ import path from "node:path";
 import type { AppConfig, SourceConfig } from "../models/config.js";
 import { ConfigStore } from "../storage/config-store.js";
 import type { StateStore } from "../storage/state-store.js";
-import type { StateFile } from "../models/state.js";
+import type { InstalledSkillRecord, StateFile } from "../models/state.js";
+import type { SkillCandidate } from "../models/skill.js";
+import { scanSource } from "../scanners/skill-scanner.js";
 import { ensureDir, pathExists, removeRecursive } from "../../utils/fs.js";
 import { resolveConfiguredPath, toPosixId } from "../../utils/path.js";
 import { gitClone, gitPullFfOnly } from "../../utils/git.js";
 import { sha256Directory } from "../../utils/hash.js";
-import { copySkillDirToSsot, ensureSymlinkToSsot, getSsotRoot, readSkillMetadata } from "./ssot-service.js";
-import { assertPathInside, assertSafeSkillName, safeJoin } from "../../utils/safe-path.js";
+import { assertPathInside } from "../../utils/safe-path.js";
+import { detachAgentSymlinks, getSsotRoot } from "./ssot-service.js";
+
 
 export interface SyncResult {
   sourceId: string;
@@ -47,8 +50,36 @@ export function listSources(config: AppConfig): SourceConfig[] {
   return config.sources;
 }
 
-/** 注册本地目录为 `local-dir` source；重复 path 报错，不产生重复 source。 */
-export async function addSource(configStore: ConfigStore, dirPath: string, options: { id?: string } = {}): Promise<SourceConfig> {
+export type AddSourceType = "repo" | "folder" | "skill";
+
+export interface AddSourceOptions {
+  type?: AddSourceType;
+  branch?: string;
+  id?: string;
+}
+
+export interface AddSourceResult {
+  source: SourceConfig;
+  /** 自动探测重新关联的孤儿 skill（state.source.sourceId 被重写为新 source）。 */
+  reboundOrphans: string[];
+}
+
+/**
+ * 统一注册来源（R2 三合一）。`--type` 缺省时自动推断：url→repo，含 SKILL.md 目录→skill，
+ * 含子 skill 目录→folder。注册后自动探测 state 中的孤儿 skill 并按逻辑坐标/contentHash 重新关联（R5）。
+ */
+export async function addSource(configStore: ConfigStore, stateStore: StateStore, target: string, options: AddSourceOptions = {}): Promise<AddSourceResult> {
+  const type = options.type ?? (await inferSourceType(target));
+  let source: SourceConfig;
+  if (type === "repo") source = await addRepoSource(configStore, target, { id: options.id, branch: options.branch });
+  else if (type === "skill") source = await addSingleSkillSource(configStore, target, { id: options.id });
+  else source = await addLocalDirSource(configStore, target, { id: options.id });
+  const reboundOrphans = await rebindOrphansForNewSource(configStore, stateStore, source);
+  return { source, reboundOrphans };
+}
+
+/** 注册本地多 skill 目录为 `local-dir` source；重复 path 报错。 */
+async function addLocalDirSource(configStore: ConfigStore, dirPath: string, options: { id?: string } = {}): Promise<SourceConfig> {
   const resolved = resolveConfiguredPath(dirPath);
   if (!(await pathExists(resolved))) throw new Error(`Source path does not exist: ${resolved}`);
   const stat = await fs.stat(resolved);
@@ -59,17 +90,52 @@ export async function addSource(configStore: ConfigStore, dirPath: string, optio
   if (duplicate) throw new Error(`Source already registered: id=${duplicate.id} path=${duplicate.path}`);
 
   const id = resolveId(config, options.id, slugify(dirPath));
-  const source: SourceConfig = {
-    id,
-    name: path.basename(resolved),
-    type: "local-dir",
-    path: resolved,
-    enabled: true,
-    readonly: false
-  };
+  const source: SourceConfig = { id, name: path.basename(resolved), type: "local-dir", path: resolved, enabled: true, readonly: false };
   config.sources.push(source);
   await configStore.write(config);
   return source;
+}
+
+/** 注册单个 skill 目录为 `single-skill` source；校验 `dirPath/SKILL.md` 存在。 */
+async function addSingleSkillSource(configStore: ConfigStore, dirPath: string, options: { id?: string } = {}): Promise<SourceConfig> {
+  const resolved = resolveConfiguredPath(dirPath);
+  if (!(await pathExists(path.join(resolved, "SKILL.md")))) {
+    throw new Error(`Not a skill directory (missing SKILL.md): ${resolved}`);
+  }
+  const config = await configStore.read();
+  const duplicate = config.sources.find((source) => resolveConfiguredPath(source.path) === resolved);
+  if (duplicate) throw new Error(`Source already registered: id=${duplicate.id} path=${duplicate.path}`);
+
+  const id = resolveId(config, options.id, slugify(dirPath));
+  const source: SourceConfig = { id, name: path.basename(resolved), type: "single-skill", path: resolved, enabled: true, readonly: false };
+  config.sources.push(source);
+  await configStore.write(config);
+  return source;
+}
+
+/** 推断来源类型：url→repo，目录含 SKILL.md→skill，含子 skill 目录→folder，否则 folder。 */
+async function inferSourceType(target: string): Promise<AddSourceType> {
+  if (isUrl(target)) return "repo";
+  const resolved = resolveConfiguredPath(target);
+  if (!(await pathExists(resolved))) throw new Error(`Source path does not exist: ${resolved}`);
+  if (await pathExists(path.join(resolved, "SKILL.md"))) return "skill";
+  try {
+    const entries = await fs.readdir(resolved, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && (await pathExists(path.join(resolved, entry.name, "SKILL.md")))) return "folder";
+    }
+  } catch {
+    // 无目录访问权限等：默认 folder。
+  }
+  return "folder";
+}
+
+/** 判断 target 是否为远程 url（http/https/git/ssh 协议，或 scp 语法 host:path）。 */
+function isUrl(target: string): boolean {
+  if (/^(https?|git|ssh|ftp):\/\//.test(target)) return true;
+  if (/^[A-Za-z]:[\\/]/.test(target)) return false; // Windows 绝对路径（C:\…）
+  // scp 语法：[user@]host:path（冒号前无 /）。
+  return /^[^/@\s]+@[^/\s:@]+:[^/\s]/.test(target) || /^[A-Za-z0-9][\w.-]*:[^/\s]/.test(target);
 }
 
 /** clone git 仓库到 `repos/<id>`，成功后注册 `git-repo` source；clone 失败不写 config 并清理半成品。 */
@@ -106,49 +172,113 @@ export async function addRepoSource(configStore: ConfigStore, gitUrl: string, op
   return source;
 }
 
-/** 同步 git-repo source：clone 目录缺失则 clone，存在则 `pull --ff-only`。无 id 时遍历所有 enabled git-repo。 */
-export async function syncSources(configStore: ConfigStore, sourceId?: string, stateStore?: StateStore): Promise<SyncResult[]> {
-  const config = await configStore.read();
-  const targets: SourceConfig[] = [];
-  if (sourceId) {
-    const source = requireSource(config, sourceId);
-    if (source.type !== "git-repo") throw new Error(`Source ${sourceId} is not a git-repo (got ${source.type})`);
-    targets.push(source);
-  } else {
-    targets.push(...config.sources.filter((source) => source.type === "git-repo" && source.enabled));
-  }
-
-  const results: SyncResult[] = [];
-  for (const source of targets) {
-    const result = await syncOne(source);
-    if (result.success && stateStore) {
-      const updateResult = await updateInstalledForSource(config, await stateStore.read(), source, stateStore);
-      result.updatedSkills = updateResult.updated;
-      result.skippedSkills = updateResult.skipped;
-      result.conflicts = updateResult.conflicts;
-    }
-    results.push(result);
-  }
-  return results;
+export interface SourceUpdateReport {
+  sourceId: string;
+  action: "clone" | "pull" | "rescan";
+  success: boolean;
+  error?: string;
+  /** source 目录 hash 与 state.contentHash 不同：有新版，待 `skill update`。 */
+  updatableSkills: string[];
+  /** hash 一致，无新版。 */
+  upToDateSkills: string[];
 }
 
-/** 从 config 删除 source；`--purge` 时仅当 path 位于 `repos/` 下才删除已 clone 目录。 */
-export async function removeSource(configStore: ConfigStore, id: string, options: { purge?: boolean } = {}): Promise<void> {
+/**
+ * 拉取/重扫来源（git `pull --ff-only` / folder·single-skill 重扫），比较 installed skill 的 source hash
+ * 与 state.contentHash，报告哪些有新版。**不**替换 SSOT（R3 两步分离：SSOT 替换由 `skillUpdate` 显式触发）。
+ * 无 id 时遍历所有 enabled non-agent-dir source。
+ */
+export async function sourceUpdate(configStore: ConfigStore, stateStore: StateStore, sourceId?: string): Promise<SourceUpdateReport[]> {
+  const config = await configStore.read();
+  const state = await stateStore.read();
+  const targets: SourceConfig[] = sourceId
+    ? [requireSource(config, sourceId)]
+    : config.sources.filter((source) => source.enabled && source.type !== "agent-dir");
+  const reports: SourceUpdateReport[] = [];
+  for (const source of targets) {
+    reports.push(await updateOneSource(config, state, source));
+  }
+  return reports;
+}
+
+async function updateOneSource(config: AppConfig, state: StateFile, source: SourceConfig): Promise<SourceUpdateReport> {
+  const dest = resolveConfiguredPath(source.path);
+  const exists = await pathExists(dest);
+  const action: SourceUpdateReport["action"] = source.type === "git-repo" ? (exists ? "pull" : "clone") : "rescan";
+
+  if (source.type === "git-repo") {
+    const pulled = await syncOne(source);
+    if (!pulled.success) return { sourceId: source.id, action, success: false, error: pulled.error, updatableSkills: [], upToDateSkills: [] };
+  } else if (!exists) {
+    return { sourceId: source.id, action, success: false, error: `Source path does not exist: ${dest}`, updatableSkills: [], upToDateSkills: [] };
+  }
+
+  const updatable: string[] = [];
+  const upToDate: string[] = [];
+  for (const record of Object.values(state.installedSkills)) {
+    if (record.source.kind !== "configured-source" || record.source.sourceId !== source.id) continue;
+    const sourceSkillDir = resolveSourceSkillDir(source, record.source.relativePath);
+    if (!(await pathExists(path.join(sourceSkillDir, "SKILL.md")))) continue;
+    const nextHash = await sha256Directory(sourceSkillDir);
+    if (nextHash === record.contentHash) upToDate.push(record.skillName);
+    else updatable.push(record.skillName);
+  }
+  return { sourceId: source.id, action, success: true, updatableSkills: updatable, upToDateSkills: upToDate };
+}
+
+/** source root + relativePath → source 中该 skill 的目录绝对路径（供 sourceUpdate/skillUpdate 复用）。含 containment 校验，防 `../` 逃逸。 */
+export function resolveSourceSkillDir(source: SourceConfig, relativePath: string): string {
+  const sourceRoot = resolveConfiguredPath(source.path);
+  const relative = relativePath === "." ? "" : relativePath;
+  const resolved = path.join(sourceRoot, relative);
+  assertPathInside(sourceRoot, resolved, "source skill path");
+  return resolved;
+}
+
+/**
+ * 从 config 删除 source（R4）。
+ * - 默认：只删 config.sources 记录，保留其贡献的 SSOT skill 与 agent symlink（变为孤儿，
+ *   由 refresh 实时计算 orphan 标记；仍可 enable/disable，但 skill update 失败）。
+ * - `--purge`：级联删除该 source 贡献的 SSOT 目录 + 断开所有 agent symlink + 删 state record；
+ *   git-repo 的 clone 目录（位于 repos/ 下）一并删除。
+ */
+export async function removeSource(configStore: ConfigStore, stateStore: StateStore, id: string, options: { purge?: boolean } = {}): Promise<{ orphaned: string[]; purged: string[] }> {
   const config = await configStore.read();
   const source = requireSource(config, id);
+  const state = await stateStore.read();
+  const contributed = Object.values(state.installedSkills).filter((record) => record.source.kind === "configured-source" && record.source.sourceId === id);
 
   if (options.purge) {
-    const reposDir = resolveConfiguredPath(config.paths.repos);
-    const target = resolveConfiguredPath(source.path);
-    const rel = path.relative(reposDir, target);
-    if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
-      throw new Error(`--purge refused: source path is not under repos dir: ${target}`);
+    // 先校验所有 SSOT 路径在 SSOT root 内（防 state 污染导致误删任意目录）。
+    for (const record of contributed) {
+      assertPathInside(getSsotRoot(config), record.ssotPath, "installed SSOT path");
     }
-    await fs.rm(target, { recursive: true, force: true });
+    // 删 symlink（仅删经校验的、指向 agent.skills_dir/<skillName> 的 symlink）+ 删 SSOT。
+    // SSOT 删除失败抛错（关键操作），此时 state/config 尚未写回，保持一致。
+    for (const record of contributed) {
+      await detachAgentSymlinks(config, record);
+      await fs.rm(record.ssotPath, { recursive: true, force: true });
+      delete state.installedSkills[record.skillName];
+    }
+    await stateStore.write(state);
+    // git-repo clone 目录删除（仅 git-repo；越界抛错，不静默跳过）。
+    if (source.type === "git-repo") {
+      const reposDir = resolveConfiguredPath(config.paths.repos);
+      const cloneTarget = resolveConfiguredPath(source.path);
+      const rel = path.relative(reposDir, cloneTarget);
+      if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
+        throw new Error(`--purge refused: git repo path is not under repos dir: ${cloneTarget}`);
+      }
+      await safeRmRf(cloneTarget);
+    }
   }
 
   config.sources = config.sources.filter((entry) => entry.id !== id);
   await configStore.write(config);
+  return {
+    orphaned: options.purge ? [] : contributed.map((record) => record.skillName),
+    purged: options.purge ? contributed.map((record) => record.skillName) : []
+  };
 }
 
 /** 切换 source enabled；未知 id 报错。 */
@@ -194,61 +324,6 @@ async function syncOne(source: SourceConfig): Promise<SyncResult> {
   }
 }
 
-async function updateInstalledForSource(config: AppConfig, state: StateFile, source: SourceConfig, stateStore: StateStore): Promise<{ updated: string[]; skipped: string[]; conflicts: string[] }> {
-  const updated: string[] = [];
-  const skipped: string[] = [];
-  const conflicts: string[] = [];
-  for (const record of Object.values(state.installedSkills)) {
-    if (record.source.kind !== "configured-source" || record.source.sourceId !== source.id) continue;
-    try {
-      assertSafeSkillName(record.skillName);
-      assertPathInside(getSsotRoot(config), record.ssotPath, "installed SSOT path");
-      const sourceRoot = resolveConfiguredPath(source.path);
-      const relative = record.source.relativePath === "." ? "" : record.source.relativePath;
-      const sourceSkillDir = path.join(sourceRoot, relative);
-      assertPathInside(sourceRoot, sourceSkillDir, "source skill path");
-      if (!(await pathExists(path.join(sourceSkillDir, "SKILL.md")))) {
-        skipped.push(`${record.skillName}: source skill missing`);
-        continue;
-      }
-
-      const nextHash = await sha256Directory(sourceSkillDir);
-      if (nextHash === record.contentHash) {
-        skipped.push(`${record.skillName}: up-to-date`);
-      } else {
-        await copySkillDirToSsot(sourceSkillDir, record.ssotPath, { replace: true });
-        const metadata = await readSkillMetadata(record.ssotPath, record.skillName);
-        record.displayName = metadata.displayName;
-        record.description = metadata.description;
-        record.tags = metadata.tags;
-        record.contentHash = await sha256Directory(record.ssotPath);
-        record.updatedAt = new Date().toISOString();
-        updated.push(record.skillName);
-        await stateStore.write(state);
-      }
-
-      for (const agentRecord of Object.values(record.enabledAgents)) {
-        const agent = config.agents[agentRecord.agentId];
-        if (!agent) {
-          conflicts.push(`${record.skillName}:${agentRecord.agentId}: unknown agent`);
-          continue;
-        }
-        const expectedTargetPath = safeJoin(resolveConfiguredPath(agent.skills_dir), record.skillName, "agent skill path");
-        if (path.resolve(agentRecord.targetPath) !== path.resolve(expectedTargetPath)) {
-          conflicts.push(`${record.skillName}:${agentRecord.agentId}: state target path does not match agent skill path`);
-          continue;
-        }
-        const result = await ensureSymlinkToSsot(expectedTargetPath, record.ssotPath);
-        if (result.status === "conflict") conflicts.push(`${record.skillName}:${agentRecord.agentId}: ${result.reason}`);
-      }
-    } catch (error) {
-      conflicts.push(`${record.skillName}: ${errorMessage(error)}`);
-    }
-  }
-
-  return { updated, skipped, conflicts };
-}
-
 async function safeCleanup(target: string): Promise<void> {
   try {
     await removeRecursive(target);
@@ -259,4 +334,64 @@ async function safeCleanup(target: string): Promise<void> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * 新 source 注册后，自动探测 state 中的孤儿 skill 并重新关联（R5）。
+ * - git source：按 url 匹配（branch 随新 source）。
+ * - 非 git source：按 contentHash（source skill 目录 hash === state.contentHash）匹配。
+ * 匹配到的孤儿重写 sourceId 与逻辑坐标，恢复 update 能力。
+ */
+async function rebindOrphansForNewSource(configStore: ConfigStore, stateStore: StateStore, source: SourceConfig): Promise<string[]> {
+  const config = await configStore.read();
+  const state = await stateStore.read();
+  const candidates = await scanSource(source);
+  const candidateByName = new Map<string, SkillCandidate>();
+  const ambiguousNames = new Set<string>();
+  for (const candidate of candidates) {
+    if (candidateByName.has(candidate.skillName)) ambiguousNames.add(candidate.skillName);
+    else candidateByName.set(candidate.skillName, candidate);
+  }
+
+  const sourceRoot = resolveConfiguredPath(source.path);
+  const rebound: string[] = [];
+  let changed = false;
+  for (const record of Object.values(state.installedSkills)) {
+    if (record.source.kind !== "configured-source") continue;
+    const installedSource = record.source;
+    if (config.sources.some((entry) => entry.id === installedSource.sourceId)) continue; // 非孤儿
+    const candidate = candidateByName.get(record.skillName);
+    if (!candidate || ambiguousNames.has(record.skillName)) continue; // 同名多 candidate 歧义：交由显式 `skill rebind`。
+    if (!(await matchOrphanToCandidate(installedSource, record.contentHash, source, candidate))) continue;
+    installedSource.sourceId = source.id;
+    installedSource.sourceType = source.type;
+    installedSource.sourcePath = sourceRoot;
+    installedSource.relativePath = path.relative(sourceRoot, candidate.path).split(path.sep).join("/") || ".";
+    if (source.url !== undefined) installedSource.url = source.url;
+    if (source.branch !== undefined) installedSource.branch = source.branch;
+    rebound.push(record.skillName);
+    changed = true;
+  }
+  if (changed) await stateStore.write(state);
+  return rebound;
+}
+
+async function matchOrphanToCandidate(installedSource: { url?: string; branch?: string }, contentHash: string, source: SourceConfig, candidate: SkillCandidate): Promise<boolean> {
+  if (source.type === "git-repo") {
+    const urlMatch = installedSource.url && source.url && installedSource.url === source.url;
+    const branchMatch = installedSource.branch === source.branch;
+    return Boolean(urlMatch && branchMatch);
+  }
+  // 非 git：source skill 目录 hash === state contentHash（注意 candidate.hash 是文件 hash，不可直接比）。
+  const sourceDirHash = await sha256Directory(candidate.path);
+  return sourceDirHash === contentHash;
+}
+
+/** best-effort 递归删除目录。 */
+async function safeRmRf(targetPath: string): Promise<void> {
+  try {
+    await fs.rm(targetPath, { recursive: true, force: true });
+  } catch {
+    // best-effort：删除失败不阻塞 source remove 主流程。
+  }
 }

@@ -140,6 +140,25 @@ export async function ensureSymlinkToSsot(targetPath: string, ssotPath: string):
   return { status: "conflict", reason: `target symlink points to ${linkTarget}` };
 }
 
+/**
+ * 断开 installed skill 的所有 agent symlink（仅删经校验的、指向 agent.skills_dir/<skillName> 的 symlink）。
+ * best-effort：unknown agent / 路径不一致 / 非 symlink / 缺失均跳过。供 skillRemove 与 source remove --purge 复用。
+ */
+export async function detachAgentSymlinks(config: AppConfig, record: InstalledSkillRecord): Promise<void> {
+  for (const agentRecord of Object.values(record.enabledAgents)) {
+    const agent = config.agents[agentRecord.agentId];
+    if (!agent) continue;
+    const expectedPath = safeJoin(resolveConfiguredPath(agent.skills_dir), record.skillName, "agent skill path");
+    if (path.resolve(agentRecord.targetPath) !== path.resolve(expectedPath)) continue;
+    try {
+      const stat = await safeLstat(expectedPath);
+      if (stat?.isSymbolicLink()) await fs.unlink(expectedPath);
+    } catch {
+      // best-effort：symlink 缺失或非 symlink 跳过。
+    }
+  }
+}
+
 export async function replaceSymlinkToSsot(targetPath: string, ssotPath: string): Promise<void> {
   const stat = await safeLstat(targetPath);
   if (stat) {

@@ -46,17 +46,14 @@ export function cellSymbol(status: InstallationStatus | undefined, pending: Pend
   switch (status) {
     case "installed":
       return "✓";
-    case "available":
-      return "○";
-    case "unsupported":
-      return "×";
     case "conflict":
     case "broken-link":
     case "external":
       return "!";
     case "missing":
-    default:
       return "·";
+    default:
+      return "○";
   }
 }
 
@@ -110,8 +107,7 @@ export function Matrix({ skills, agents, installations, pending, cursor }: Matri
             <Text bold={row === cursor.row}>{skill.name.padEnd(nameWidth)} </Text>
             {agents.map((agent) => {
               const record = installations[installationKey(skill.name, agent.id)];
-              const status: InstallationStatus | undefined =
-                record?.status ?? (agent.enabled ? "available" : "unsupported");
+              const status: InstallationStatus | undefined = record?.status;
               const isCursorCell =
                 row === cursor.row && agent.enabled && agent.enabledOrdinal === cursor.col;
               return (

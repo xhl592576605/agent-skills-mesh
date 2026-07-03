@@ -27,26 +27,35 @@ export async function detectInstallations(config: AppConfig, skills: Record<stri
   const records: Record<string, InstallationRecord> = {};
   for (const skill of Object.values(skills)) {
     for (const [agentId, agent] of Object.entries(config.agents)) {
-      const record = await detectInstallation(skill, agentId, agent.enabled ? resolveConfiguredPath(agent.skills_dir) : undefined, state.installedSkills[skill.name]);
-      records[record.id] = record;
+      if (!agent.enabled) continue;
+      const record = await detectInstallation(skill, agentId, resolveConfiguredPath(agent.skills_dir), state.installedSkills[skill.name]);
+      if (record) records[record.id] = record;
     }
   }
   return records;
 }
 
-export async function detectInstallation(skill: SkillRecord, agentId: string, skillsDir?: string, installed?: InstalledSkillRecord): Promise<InstallationRecord> {
-  const targetPath = skillsDir ? safeJoin(skillsDir, skill.name, "agent skill path") : skill.name;
+/**
+ * installations 是 state.enabledAgents 的 symlink 健康投影：status 只表达 symlink 健康度
+ * （installed/missing/broken-link/conflict/external），不再表达「是否 enabled」。
+ * 未声明 enabled 且 target 不存在时返回 undefined（available 隐含，不写入 installations）。
+ */
+export async function detectInstallation(skill: SkillRecord, agentId: string, skillsDir: string, installed?: InstalledSkillRecord): Promise<InstallationRecord | undefined> {
+  const targetPath = safeJoin(skillsDir, skill.name, "agent skill path");
   const expected = installed?.ssotPath ?? selectCandidate(skill)?.path;
   const base = { id: `${skill.name}:${agentId}`, skillName: skill.name, agentId, targetPath, expectedLinkTarget: expected };
-  if (!skillsDir) return { ...base, status: "unsupported", reason: "agent disabled" };
-  const lstat = await safeLstat(targetPath);
   const expectedEnabled = Boolean(installed?.enabledAgents[agentId]);
-  if (!lstat) return expectedEnabled ? { ...base, status: "missing", reason: "enabled agent symlink is missing" } : { ...base, status: "available" };
+  const lstat = await safeLstat(targetPath);
+  if (!lstat) return expectedEnabled ? { ...base, status: "missing", reason: "enabled agent symlink is missing" } : undefined;
   if (lstat.isSymbolicLink()) {
     const linkTargetRaw = await fs.readlink(targetPath);
     const linkTarget = path.resolve(path.dirname(targetPath), linkTargetRaw);
     if (!(await pathExists(linkTarget))) return { ...base, status: "broken-link", linkTarget, reason: "symlink target is missing" };
-    if (expected && samePath(linkTarget, expected)) return { ...base, status: "installed", linkTarget, installedCandidateId: selectCandidate(skill)?.id };
+    if (expected && samePath(linkTarget, expected)) {
+      return expectedEnabled
+        ? { ...base, status: "installed", linkTarget }
+        : { ...base, status: "external", linkTarget, reason: "symlink points to SSOT but agent is not enabled in state" };
+    }
     if (installed) return { ...base, status: "external", linkTarget, reason: "symlink points outside ASM SSOT" };
     if (skill.candidates.some((candidate) => samePath(candidate.path, linkTarget))) return { ...base, status: "conflict", linkTarget, reason: "symlink points to another candidate" };
     return { ...base, status: "external", linkTarget, reason: "symlink points outside indexed candidates" };
@@ -71,8 +80,8 @@ export async function buildInstallPlan(config: AppConfig, index: IndexFile, skil
   const actions: InstallAction[] = [];
   const ssotPath = existing?.ssotPath ?? getSsotSkillPath(config, skill.name);
 
-  if (skill.status === "conflict" && !skill.preferredCandidateId && !skill.preferredSourceId && !existing) {
-    actions.push({ type: "conflict", agentId, targetPath: safeJoin(resolveConfiguredPath(agent.skills_dir), skill.name, "agent skill path"), reason: "multiple candidates require a preferred source" });
+  if (skill.status === "conflict" && !existing) {
+    actions.push({ type: "conflict", agentId, targetPath: safeJoin(resolveConfiguredPath(agent.skills_dir), skill.name, "agent skill path"), reason: `multiple source candidates; run \`skill add ${skillName} --source <id>\` first` });
     return makePlan(skill, candidate, ssotPath, actions, warnings);
   }
   if (!agent.enabled) {
@@ -215,8 +224,6 @@ export async function applyRepairPlan(plan: RepairPlan): Promise<void> {
 }
 
 export function selectCandidate(skill: SkillRecord): SkillCandidate | undefined {
-  if (skill.preferredCandidateId) return skill.candidates.find((candidate) => candidate.id === skill.preferredCandidateId);
-  if (skill.preferredSourceId) return skill.candidates.find((candidate) => candidate.sourceId === skill.preferredSourceId);
   if (skill.candidates.length === 1) return skill.candidates[0];
   return undefined;
 }

@@ -29,8 +29,7 @@ const FALLBACK_CONFIG: AppConfig = {
   settings: { install_strategy: "symlink", default_agent: "pi", auto_refresh_on_start: true },
   paths: { home: "", repos: "", local: "", cache: "", skills: "" },
   sources: [],
-  agents: {},
-  skillOverrides: {}
+  agents: {}
 };
 
 /** status → 终端安全符号（与 asm doctor CLI 一致：✓ ok / ! warning / ✗ error）。 */

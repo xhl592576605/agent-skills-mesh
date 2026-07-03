@@ -1,7 +1,5 @@
 export type InstallationStatus =
   | "installed"
-  | "available"
-  | "unsupported"
   | "conflict"
   | "broken-link"
   | "external"
@@ -15,6 +13,5 @@ export interface InstallationRecord {
   targetPath: string;
   linkTarget?: string;
   expectedLinkTarget?: string;
-  installedCandidateId?: string;
   reason?: string;
 }

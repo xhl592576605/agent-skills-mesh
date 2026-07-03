@@ -57,7 +57,7 @@ export function useIndexState(): UseIndexStateResult {
         let loadedIndex = await indexStore.read();
         const loadedState = await stateStore.read();
         if (loadedIndex.updatedAt === EMPTY_INDEX_SENTINEL) {
-          loadedIndex = await refreshIndex(loadedConfig, undefined, loadedState);
+          loadedIndex = await refreshIndex(loadedConfig, loadedState);
           await indexStore.write(loadedIndex);
         }
         if (cancelled) return;
@@ -79,7 +79,7 @@ export function useIndexState(): UseIndexStateResult {
 
   const refresh = useCallback(async () => {
     if (!config) throw new Error("config not loaded yet");
-    const next = await refreshIndex(config, index ?? createEmptyIndex(), await stateStore.read());
+    const next = await refreshIndex(config, await stateStore.read());
     await indexStore.write(next);
     setIndex(next);
     return next;

@@ -37,7 +37,7 @@ export function SkillInspector({ skill, agents, installations, pending }: SkillI
       ) : (
         skill.candidates.map((candidate) => (
           <Text key={candidate.id}>
-            {skill.preferredCandidateId === candidate.id ? "★ " : "  "}
+            {"  "}
             <Text bold>{candidate.sourceId}</Text>
             {"  "}
             <Text dimColor>{candidate.path}</Text>
@@ -54,7 +54,7 @@ export function SkillInspector({ skill, agents, installations, pending }: SkillI
         return (
           <Text key={agent.id}>
             {cellSymbol(record?.status, intent)} <Text bold>{agent.id}</Text>
-            <Text dimColor> {record?.status ?? (agent.enabled ? "available" : "unsupported")}</Text>
+            <Text dimColor> {record?.status ?? "—"}</Text>
             {record?.reason ? <Text dimColor> — {record.reason}</Text> : null}
           </Text>
         );

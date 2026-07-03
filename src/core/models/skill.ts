@@ -1,7 +1,7 @@
 import type { SourceType } from "./config.js";
 
 export type SkillOrigin = "configured-source" | "global-dir" | "agent-dir" | "manual-add" | "manual-import";
-export type SkillStatus = "managed" | "discovered" | "conflict" | "ignored" | "missing";
+export type SkillStatus = "managed" | "orphan" | "discovered" | "conflict" | "missing";
 
 export interface SkillCandidate {
   id: string;
@@ -26,9 +26,6 @@ export interface SkillRecord {
   description?: string;
   tags: string[];
   status: SkillStatus;
-  preferredCandidateId?: string;
-  preferredSourceId?: string;
   candidates: SkillCandidate[];
   supportedAgents?: string[];
-  ignored?: boolean;
 }

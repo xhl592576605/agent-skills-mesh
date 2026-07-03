@@ -7,9 +7,9 @@ import type { TuiAction, TuiSnapshot, TuiState } from "./types.js";
  * 行为约束（design「状态机与数据流」「全局状态容器」）：
  * - pending 是唯一可变累积状态，每次更新返回新外层 + 新内层 Map（不可变）。
  * - TOGGLE_PENDING 的「可否 toggle」知识来自 installation status：
- *   installed→uninstall、available→install，其余（unsupported/conflict/
- *   external/broken-link/missing）不可 toggle（broken-link 由 Doctor 修，
- *   conflict 由 prefer/force），与 design 状态机一致。
+ *   installed→uninstall、undefined→enable，其余（conflict/external/
+ *   broken-link/missing）不可 toggle（broken-link 由 Doctor 修，
+ *   conflict 由 skill add --source / skill rebind 解决），与 design 状态机一致。
  * - Matrix 维度：行 = 按 name 排序的 skills；列 = enabled agents
  *   （按 config.agents 声明顺序）。disabled agent 不可达（其格本就 unsupported）。
  *   展示层是否额外渲染 disabled 列由组件决定，reducer 只按 enabled 列 clamp 光标。
@@ -60,7 +60,7 @@ function installationStatusOf(snapshot: TuiSnapshot | null, skillName: string, a
 /** 根据 installation status 推导单格 toggle 后的意图；不可 toggle 时返回 undefined。 */
 function intentForStatus(status: InstallationStatus | undefined): "install" | "uninstall" | undefined {
   if (status === "installed") return "uninstall";
-  if (status === "available") return "install";
+  if (status === undefined) return "install";
   return undefined;
 }
 
@@ -121,7 +121,7 @@ export function reducer(state: TuiState, action: TuiAction): TuiState {
       }
 
       const intent = intentForStatus(installationStatusOf(state.snapshot, skillName, agentId));
-      if (!intent) return state; // unsupported/conflict/external/broken-link/missing：不可 toggle。
+      if (!intent) return state; // conflict/external/broken-link/missing：不可 toggle。
 
       const newOuter = new Map(outer);
       newOuter.set(skillName, new Map([...(inner ?? []), [agentId, intent]]));
