@@ -57,20 +57,22 @@ export async function runDoctor(configStore: ConfigStore, indexStore: IndexStore
     }
   }
   if (index) {
-    for (const skill of Object.values(index.skills)) {
-      if (skill.status === "conflict") checks.push(warn("conflict", `skill conflict: ${skill.name}`));
+    // index.issues 已含 orphan / installed-source-missing / broken-link / conflict（refresh 时派生）。
+    // index.issues 已含 orphan / installed-source-missing / broken-link / conflict（refresh 时派生）。
+    // severity 映射：error→error、info→ok（降级避免噪音；info 当前不产出，预留）、warning→warn。
+    for (const issue of index.issues) {
+      let fix: DoctorFix | undefined;
+      if (issue.kind === "broken-link") {
+        const installation = index.installations[issue.ref ?? ""];
+        if (installation) fix = { type: "repair-broken-link", skillName: installation.skillName, agentId: installation.agentId, targetPath: installation.targetPath };
+      }
+      if (issue.severity === "error") checks.push(error(issue.kind, issue.message, fix));
+      else if (issue.severity === "info") checks.push(ok(issue.kind, issue.message));
+      else checks.push(warn(issue.kind, issue.message, fix));
     }
+    // external（agent 目录真实目录 / 外部 symlink）不进入 issues，单独报告。
     for (const installation of Object.values(index.installations)) {
-      if (installation.status === "broken-link")
-        checks.push(
-          warn("broken-link", `broken symlink: ${installation.targetPath}`, {
-            type: "repair-broken-link",
-            skillName: installation.skillName,
-            agentId: installation.agentId,
-            targetPath: installation.targetPath
-          })
-        );
-      if (installation.status === "conflict") checks.push(warn("conflict", `installation conflict: ${installation.targetPath}`));
+      if (installation.status === "external") checks.push(warn("external", `external skill: ${installation.targetPath}${installation.reason ? ` (${installation.reason})` : ""}`));
     }
   }
   return checks;
