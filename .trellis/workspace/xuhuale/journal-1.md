@@ -244,3 +244,36 @@ Implemented strict ASM private SSOT skill installs with state.json, SSOT symlink
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: TUI 重设计：Ink/React → @opentui/solid + Bun
+
+**Date**: 2026-07-06
+**Task**: TUI 重设计：Ink/React → @opentui/solid + Bun
+**Branch**: `main`
+
+### Summary
+
+完成 TUI 重设计（4 child：infra/matrix/views/test-spec）。框架迁移到 @opentui/core+solid+keymap@0.4.3 + Bun（jsx preserve + bunfig preload 解决 solid JSX 响应式）；Matrix 表格化 [on]/[off]/[!] 标签 + 集中键盘路由（AppShell 单一 useKeyboard + useViewKey，避双触发）；Source/Doctor 视图 + Confirm/Prompt/Select/AddSource/SkillDetail 弹窗（web 风格浮层）；CLI 全功能对齐（16 项）。117 测试 cases + frontend spec 7 篇改写 + standalone 构建链（darwin-arm64 69MB 实测）。全程 core 零改动、CLI 兼容。经多轮 trellis-check（含 Phase 0 验证：bun+solid JSX 转译/standalone/vitest）+ 用户真终端签收。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `26de2a6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
-- **Last Active**: 2026-07-03
+- **Total Sessions**: 8
+- **Last Active**: 2026-07-06
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~246 | Active |
+| `journal-1.md` | ~279 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 8 | 2026-07-06 | TUI 重设计：Ink/React → @opentui/solid + Bun | `26de2a6` | `main` |
 | 7 | 2026-07-03 | 重构 ASM CLI 为三层命令模型（service 层 + commander + 测试 + spec） | `d60e5ee`, `4d1d65c`, `fde0fa8`, `bb39949` | `main` |
 | 6 | 2026-07-03 | SSOT skill management | `ade8603` | `main` |
 | 5 | 2026-07-03 | Scanner: nested skill dirs + plugin manifest (align skills.sh) | `6be17f9` | `main` |
