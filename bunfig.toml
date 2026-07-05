@@ -1,0 +1,4 @@
+# Bun 启动时预加载 @opentui/solid 的 transform plugin，把 JSX 表达式（如 {signal()}）
+# 包成响应式 getter。缺此配置，bun 下 solid 的动态 signal 驱动的 JSX 不会响应式更新
+# （task 07-05 Phase 0 实测铁证）。
+preload = ["@opentui/solid/preload"]

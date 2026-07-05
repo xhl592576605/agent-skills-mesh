@@ -3,26 +3,34 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "asm": "./dist/cli/index.js"
+    "asm": "./bin/asm.js"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
+    "build": "bun run scripts/build-standalone.ts",
     "test": "vitest run",
-    "dev": "tsx src/cli/index.ts"
+    "dev": "bun run src/cli/index.ts"
   },
   "dependencies": {
+    "@opentui/core": "^0.4.3",
+    "@opentui/keymap": "^0.4.3",
+    "@opentui/solid": "^0.4.3",
     "commander": "^15.0.0",
     "gray-matter": "^4.0.3",
-    "ink": "^5.0.0",
-    "react": "^18.3.0"
+    "solid-js": "^1.9.14"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "@types/react": "^18.3.31",
-    "ink-testing-library": "^4.0.0",
-    "tsx": "^4.20.0",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0"
+  },
+  "optionalDependencies": {
+    "agent-skills-mesh-darwin-arm64": "0.1.0",
+    "agent-skills-mesh-darwin-x64": "0.1.0",
+    "agent-skills-mesh-linux-arm64": "0.1.0",
+    "agent-skills-mesh-linux-x64": "0.1.0",
+    "agent-skills-mesh-linux-arm64-musl": "0.1.0",
+    "agent-skills-mesh-linux-x64-musl": "0.1.0",
+    "agent-skills-mesh-win32-x64": "0.1.0"
   }
 }

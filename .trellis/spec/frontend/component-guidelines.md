@@ -1,88 +1,134 @@
 # Component Guidelines
 
-> Component conventions for the future Ink/React TUI.
+> SolidJS + OpenTUI component conventions for `src/tui/**`.
 
 ---
 
 ## Current State
 
-There are no production React components in this repository today. Do not invent Web component patterns or add component directories for unrelated CLI/core work.
+TUI components live under `src/tui/components/`, `src/tui/dialogs/`, and
+`src/tui/views/`. They render OpenTUI primitives (`<box>`, `<text>`) and consume
+typed data from core services via Solid Context (`useData`, `useTheme`,
+`useDialog`, `useViewKey`).
 
-Evidence:
+Core service outputs consumed by components:
 
-- `package.json` does not currently depend on `react` or `ink`.
-- `src/` has no `tui/` or `components/` directory.
-- The archived design in `.trellis/tasks/archive/2026-07/07-02-agent-skills-mesh/design.md` describes a future terminal TUI with Ink/React screens: Matrix, Discover, and Doctor.
+- `DoctorCheck[]` / `DoctorFix` from `src/core/services/doctor-service.ts` →
+  `DoctorView`.
+- `InstallPlan` / `UninstallPlan` / repair plans from
+  `src/core/services/install-service.ts` → dialogs + views after confirmation.
+- `IndexFile.skills` / `IndexFile.installations` from
+  `src/core/models/index.ts` → `Matrix` via `projection.ts`.
+- `AppConfig` / `StateFile` snapshot from `ConfigStore` / `StateStore` →
+  `DataProvider`.
 
 ---
 
-## Future TUI Component Boundary
+## Primitives
 
-When TUI implementation starts:
+OpenTUI exposes layout primitives, not DOM elements:
 
-- Build terminal UI components, not browser components.
-- Keep domain behavior in `src/core/services/**` and pass typed data into components.
-- Use components for rendering and interaction only.
-- Generate install/uninstall plans before applying any filesystem mutation.
+- `<box>` — flex container. Common props: `flexDirection` (`"row"` | `"column"`),
+  `flexGrow`, `width`, `height`, `paddingLeft/Right/Top/Bottom`, `left`, `top`,
+  `position` (`"absolute"` for overlays), `zIndex`, `backgroundColor` (RGBA),
+  `alignItems`, `justifyContent`, `gap`, `onMouseUp`.
+- `<text>` — inline text. Common props: `fg` (RGBA), `bg`, `width`, `wrapMode`
+  (`"none"` to clip), `attributes` (`TextAttributes.BOLD`).
 
-Useful existing service outputs:
+Colors are `RGBA` instances from `@opentui/core` (`RGBA.fromHex`,
+`RGBA.fromInts`). Read them from `useTheme()`, never hardcode hex in components.
 
-- `DoctorCheck[]` from `src/core/services/doctor-service.ts` for a Doctor screen.
-- `InstallPlan` / `UninstallPlan` from `src/core/services/install-service.ts` for plan review UI.
-- `IndexFile.skills` and `IndexFile.installations` from `src/core/models/index.ts` for a Matrix screen.
+Dimensions come from `useTerminalDimensions()`, which returns an **accessor**:
+call it as `dim().width`, not `dim.width`.
 
 ---
 
 ## Component Structure
 
-No component file structure is enforced yet. If Ink/React is added, prefer small typed components such as:
+Components are kept small, typed, and close to pure render. Patterns observed
+in the real tree:
 
-```txt
-src/tui/components/Layout.tsx
-src/tui/components/SkillInspector.tsx
-src/tui/components/InstallPlanModal.tsx
-src/tui/screens/MatrixScreen.tsx
-src/tui/screens/DiscoverScreen.tsx
-src/tui/screens/DoctorScreen.tsx
-```
+- `Matrix.tsx` is a **pure render component**: all state (cursor, pending,
+  scroll) arrives via the `matrix: MatrixState` prop; the component only maps
+  state to rows/labels/cursor highlight.
+- `Dialog.tsx` is the **base overlay** used by every modal: `position="absolute"`
+  + `zIndex={3000}` + a translucent `theme.overlay` background that fills the
+  terminal; the inner panel is centered. Clicking the outer mask calls
+  `onClose`; clicking the inner panel calls `event.stopPropagation()`.
+- `ConfirmDialog.tsx` / `SelectDialog.tsx` / `PromptDialog.tsx` render inside
+  `Dialog` and expose a static `show(dialog, ...)` that returns a `Promise`
+  resolved by their `onConfirm`/`onCancel`/`onClose` paths.
 
-Keep rendering components separate from service calls when practical so the same service behavior remains testable without a terminal renderer.
+Prefer this layered shape for new modals: base `Dialog` (overlay mechanics) +
+content component (focus/keys) + `show()` helper returning a typed `Promise`.
 
 ---
 
 ## Props Conventions
 
-Future component props should use explicit TypeScript interfaces and reuse core model types where possible:
-
-- Import `SkillRecord`, `InstallationRecord`, `InstallPlan`, and `DoctorCheck` from existing core modules instead of redefining UI-specific copies.
-- Prefer readonly props for data passed from loaded config/index state.
-- Pass callbacks for user intent, such as selecting a skill or confirming a plan; callbacks should call core services outside low-level presentational components.
-
----
-
-## Styling Patterns
-
-No styling system exists today. For a future Ink TUI:
-
-- Use Ink primitives and terminal-safe layout rather than CSS, DOM classes, or browser-only styling libraries.
-- Keep symbols consistent with the design: `✓ installed`, `○ available`, `× unsupported`, `! conflict`, `~ pending`.
-- Avoid introducing Tailwind, CSS modules, or browser style tooling unless a Web frontend is explicitly added.
+- Use explicit TypeScript interfaces for props (`MatrixProps`, `DialogProps`,
+  `ConfirmDialogProps`). Reuse core model types (`SkillRecord`,
+  `InstallationRecord`, `DoctorCheck`) instead of redefining UI copies.
+- Props that come from loaded snapshot are treated as readonly data; mutations
+  happen through services after confirmation, then the snapshot is refreshed.
+- Callbacks express **user intent** (`onConfirm`, `onCancel`, `onClose`,
+  `onReview`); they must not perform filesystem writes directly. The component's
+  caller routes intent to a core service.
+- `StatusBar` accepts a `hints: readonly string[]` prop (per-tab key hints) per
+  the cross-child contract — extenders inject hints, they do not restructure the
+  component.
 
 ---
 
-## Accessibility and UX
+## Element Factories and Owner Context (critical)
 
-Browser accessibility rules are not directly applicable without a Web frontend. For the terminal TUI, keep interactions keyboard-first and text-readable:
+SolidJS resolves context via the **owner** in which JSX is created. OpenTUI's
+`useKeyboard` and event handlers run outside the component's owner, so creating
+JSX that calls `useDialog`/`useTheme` inside such a callback loses the provider
+and throws.
 
-- Do not rely on color alone; pair status with symbols/text.
-- Provide a review step before applying plans.
-- Preserve the CLI safety model: no direct filesystem mutation from a key press without a generated plan.
+The dialog stack solves this by storing each dialog as a **factory function**
+`element: () => JSX.Element` and calling it inside the `DialogProvider`'s render
+context (correct owner). This pattern comes from the reference dialog
+implementation.
+
+```ts
+// dialogs/ConfirmDialog.tsx (show): pass a factory, not a pre-built element
+dialog.replace(
+  () => <ConfirmDialog title={title} message={message} onConfirm={...} />,
+  () => resolve(false)   // onClose → resolve(false)
+)
+```
+
+Rules:
+
+- When you need deferred JSX that touches context, store `() => JSX.Element`
+  and render it inside a `<Show>` in the provider that owns the context.
+- Never call `useContext`-based hooks (`useDialog`, `useTheme`, `useData`)
+  inside `useKeyboard` callbacks or async functions; capture their values in the
+  component body first, then close over the captured value.
+
+---
+
+## Styling and Symbols
+
+- Use OpenTUI layout + RGBA theme tokens only. No CSS, no browser styling libs.
+- Keep status indicators readable **without color** — always pair color with a
+  text/symbol label. Matrix cell labels: `[on]` / `[off]` / `[+]` (pending
+  install) / `[-]` (pending uninstall) / `[!]` (warning) / `—` (disabled).
+- Doctor status: `ok` / `warn` / `error` text labels paired with
+  `theme.success` / `theme.warning` / `theme.danger`.
 
 ---
 
 ## Common Mistakes
 
-- Do not add React components for the current CLI-only code path.
-- Do not put scanning, install, or doctor logic inside components.
-- Do not use browser-specific APIs in the planned Ink TUI.
-- Do not bypass `buildInstallPlan()` / `buildUninstallPlan()` from UI actions.
+- Do not put scanning, install, repair, or doctor logic inside components —
+  call the core service and read its typed result.
+- Do not bypass `buildInstallPlan()` / `buildRepairPlan()` from UI actions;
+  always confirm via a dialog, then apply the returned plan.
+- Do not create context-consuming JSX inside `useKeyboard`/event/async callbacks
+  — use an element factory rendered in the provider's owner (see above).
+- Do not hardcode `RGBA.fromHex(...)` in components; read tokens from
+  `useTheme()`.
+- Do not introduce browser primitives (`div`, `span`, DOM events).

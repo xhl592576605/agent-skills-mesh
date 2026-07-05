@@ -66,15 +66,12 @@ program
       process.exitCode = 1;
       return;
     }
-    // config 缺失先给终端友好错误（与其它非 init 命令一致）；index 缺失由 App 的
-    // useIndexState 自动首次 refresh，故此处只校验 config。
+    // config 缺失先给终端友好错误（与其它非 init 命令一致）。
     const configStore = new ConfigStore();
     if (!(await configStore.exists())) throw new Error("config.toml not found. Run `asm init` first.");
-    // 懒加载 Ink/React 与 TUI，避免常用 CLI 命令承担 React 打包开销。.js 扩展遵循 NodeNext。
-    const { createElement } = await import("react");
-    const { render } = await import("ink");
-    const { App } = await import("../tui/App.js");
-    render(createElement(App));
+    // 懒加载 TUI（@opentui/solid），避免 CLI 冷启动加载渲染依赖。run() 内部 render(App)。
+    const { run } = await import("../tui/index.js");
+    run();
   });
 
 // === Layer 1 — Source（来源） ===

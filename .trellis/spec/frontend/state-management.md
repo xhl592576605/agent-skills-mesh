@@ -1,92 +1,143 @@
 # State Management
 
-> How UI state is managed in this project.
+> How TUI state is managed in the SolidJS + OpenTUI TUI.
 
 ---
 
 ## Current State
 
-There is no frontend state management implementation today. The current application state is local CLI/core data stored in typed objects and files:
+There is no global reducer and no Redux/Zustand. TUI state is a set of focused
+reactive primitives in `src/tui/state/` plus a snapshot store in
+`src/tui/context/data.tsx`. Domain truth still lives in typed core data:
 
-- User intent: `AppConfig` from `src/core/models/config.ts`, persisted as `config.toml` by `ConfigStore`.
-- Generated facts: `IndexFile` from `src/core/models/index.ts`, persisted as `index.json` by `IndexStore`.
-- Install decisions: `InstallPlan` / `UninstallPlan` from `src/core/models/install-plan.ts`, built by `src/core/services/install-service.ts`.
-- Health findings: `DoctorCheck[]` from `src/core/services/doctor-service.ts`.
-
-No Redux, Zustand, React Context, React Query, or browser URL state exists.
+- User intent: `AppConfig` from `src/core/models/config.ts`, persisted as
+  `config.toml` by `ConfigStore`.
+- Generated facts: `IndexFile` from `src/core/models/index.ts`, persisted as
+  `index.json` by `IndexStore`.
+- Cross-run state: `StateFile` from `src/core/models/state.ts`, persisted by
+  `StateStore`.
+- Install decisions: `InstallPlan` / `UninstallPlan` / repair plans from
+  `src/core/services/install-service.ts`.
+- Health findings: `DoctorCheck[]` / `DoctorFix` from
+  `src/core/services/doctor-service.ts`.
 
 ---
 
 ## State Categories
 
-Use these categories when implementing future UI behavior:
-
-- Persisted user state: `config.toml`; modify only through storage/service code that preserves explicit user intent.
-- Generated scan state: `index.json`; refresh from sources rather than hand-editing in UI code.
-- Pending UI state: selections, filters, matrix edits, and not-yet-applied install plans in a future TUI.
-- Derived display state: matrix symbols, filtered skill lists, and doctor summaries derived from typed core data.
+- **Persisted user state** (`config.toml`): modify only through storage/service
+  code that preserves explicit user intent.
+- **Generated scan state** (`index.json`): refresh from sources, never hand-edit
+  in UI code.
+- **Snapshot** (`DataSnapshot` in `DataProvider`): `{ config, index, state,
+  loading, error }` — the TUI's readonly view of the on-disk truth.
+- **Pending UI state**: matrix cursor + pending install/uninstall intents
+  (`createMatrixState`), search query (`createSearchState`), view-local
+  selections. Kept separate from persisted data until the user confirms.
+- **Derived display state**: matrix cell kind/label/color (`projection.ts`),
+  filtered skill lists (`filterSkills`), doctor summaries — pure functions over
+  typed core data.
 
 ---
 
-## Future TUI Pattern
+## Reactive Stores
 
-The archived design requires the TUI to operate on pending plans and not directly mutate the filesystem. Preserve this flow:
+- `DataProvider` holds a `createStore<DataSnapshot>` and exposes `snapshot`,
+  `refresh()` (re-scan sources, write `index.json`, update snapshot), and
+  `reload()` (re-read config/state/index from disk). Views read
+  `useData().snapshot` reactively; writes happen via services, then the snapshot
+  is refreshed.
+- `createMatrixState()` holds cursor (`{row,col}`), `scrollOffset`, and pending
+  intents (`PendingMap = Record<skillName, Record<agentId, Intent>>` where
+  `Intent = "install" | "uninstall"`). It exposes `setIntent`/`clearIntent`/
+  `clearRow`/`clearAll`/`move`/`realign`.
+- `createDialogStore()` holds the dialog stack and exposes `replace`/`closeTop`/
+  `clear`/`isOpen`/`stack` (see Dialog Stack below).
+
+There is no single dispatcher; each store owns its own transitions, and key
+routing is centralized (see `solid-patterns.md` → Centralized Key Routing).
+
+---
+
+## Pending → Plan → Apply Flow
+
+The TUI never writes the filesystem from a key press. Preserve this flow:
 
 ```txt
-Idle -> SelectingSkill -> EditingMatrix -> PendingPlan -> ReviewPlan -> Applying -> RefreshIndex -> Idle
+Idle → Selecting skill → Editing matrix (pending intents)
+     → Review plan (ConfirmDialog) → Apply plan (core service)
+     → refresh()/reload() snapshot → Idle
 ```
 
-Practical rules:
+Rules:
 
-- Keep user edits pending until a plan is generated and reviewed.
-- Use `buildInstallPlan()` and `buildUninstallPlan()` to represent filesystem changes.
-- Use `applyInstallPlan()` and `applyUninstallPlan()` only after confirmation.
-- Refresh the index after applied changes so UI state reflects filesystem reality.
+- Keep user edits as **pending intents** in `createMatrixState` until a plan is
+  generated.
+- Build a plan with `buildInstallPlan()` / `buildUninstallPlan()` /
+  `buildRepairPlan()` from `src/core/services/install-service.ts`.
+- Apply with `applyInstallPlan()` / `applyUninstallPlan()` / `applyRepairPlan()`
+  only after a `ConfirmDialog.show()` resolves `true`.
+- After applying, call `data.reload()` (config-mutating actions) or
+  `data.refresh()` (index-only), so the snapshot reflects disk reality.
 
 ---
 
 ## Config Mutation Requires Full Snapshot Reload
 
-The TUI snapshot is a single `{ config, index }` pair sourced from `useIndexState`. After any action that mutates `config.toml` (adopt / ignore / unignore / prefer, which write user-intent overrides), the snapshot must be reloaded **whole** — re-read both `config` and `index` — not just the `index`.
+The snapshot is a single `{ config, index, state }` triple sourced from
+`DataProvider`. After any action that mutates `config.toml` (adopt / ignore /
+unignore / prefer, which write user-intent overrides), the snapshot must be
+reloaded **whole** — re-read both `config` and `index` — not just the `index`.
 
-**Why**: These operations change the *user-intent* layer (`config.toml`), not the *scan-facts* layer (`index.json`). If the UI only updates `index` while keeping the stale `config`, the next `refreshIndex(config, index)` closes over the stale config and silently drops the just-written `managed` / `ignored` / `preferredSourceId` overrides — Matrix and Discover then drift from filesystem reality.
+**Why**: these operations change the *user-intent* layer (`config.toml`), not
+the *scan-facts* layer (`index.json`). If the UI updates only `index` while
+keeping a stale `config`, the next `refreshIndex(config, state)` closes over the
+stale config and silently drops the just-written `managed` / `ignored` /
+`preferredSourceId` overrides — Matrix and Doctor then drift from filesystem
+reality.
 
 ```ts
-// useDiscover: adopt/ignore write config.toml → must reload (re-read config + index)
+// adopt/ignore write config.toml → reload BOTH config and index
 async function adopt(skillName: string) {
-  await adoptSkill(configStore, indexStore, skillName); // writes config + refreshes index
-  reload();                                             // re-read BOTH config and index
+  await adoptSkill(configStore, indexStore, skillName) // writes config + refreshes index
+  await data.reload()                                  // re-read config AND index
 }
 
-// useDoctor: repair mutates only the filesystem (no config change) → refresh() is enough,
-// but the App-level effect must still SET_SNAPSHOT with the fresh {config, index} pair.
+// doctor repair mutates only the filesystem (no config change) → refresh() is enough,
+// but the snapshot must still reflect the fresh {config, index} pair afterwards.
 ```
 
-**Related**: See `src/tui/App.tsx` effect that dispatches `SET_SNAPSHOT` after `useIndexState.reload()` / `refresh()`. Never rebuild half of the snapshot.
-
-
-
-There is no global UI store today. If the Ink TUI grows beyond simple prop passing, use a minimal local TUI state container only for cross-screen concerns such as:
-
-- Current selected skill/agent.
-- Active screen.
-- Pending install/uninstall plans.
-- Last loaded config/index snapshot.
-
-Do not put core domain rules or filesystem mutation logic into a UI store.
+Never rebuild half of the snapshot. `DataProvider.reload()` reads the whole
+triple; prefer it over ad-hoc partial updates.
 
 ---
 
-## Server State
+## Dialog Stack
 
-No server state exists. All current state is local file and filesystem state. Do not add server-cache abstractions unless a remote marketplace or API is introduced in a separate product change.
+`createDialogStore()` (in `src/tui/context/dialog.tsx`) is a reactive stack of
+`{ element, onClose }` items. Semantics (covered by
+`tests/tui/dialog.test.ts`):
+
+- `replace(element, onClose)` — invoke `onClose` for every item in the old
+  stack, then replace the whole stack with a single new item.
+- `closeTop()` — invoke the top item's `onClose`, then remove it (ESC/ctrl+c).
+- `clear()` — in a `batch`, invoke every item's `onClose`, then empty the stack
+  (overlay-mask click).
+- `isOpen()` — `stack.length > 0`; the AppShell uses it to yield global keys.
+
+`ConfirmDialog.show()`, `SelectDialog.show()`, and `PromptDialog.show()` all
+resolve their `Promise` from both the explicit choice and the `onClose` path,
+so ESC / mask click / ctrl+c are uniformly treated as cancel.
 
 ---
 
 ## Common Mistakes
 
-- Do not store generated scan facts in `config.toml`.
-- Do not let UI state become the source of truth for installed symlinks; refresh/detect from the filesystem.
-- Do not apply changes directly while editing a matrix cell.
-- After a config-mutating action (adopt/ignore/prefer), do not dispatch a snapshot that pairs a stale `config` with a fresh `index` — reload both, or the next `refresh` drops the new overrides (see "Config Mutation Requires Full Snapshot Reload" above).
-- Do not introduce a global state library for the current CLI-only codebase.
+- Storing generated scan facts in `config.toml`.
+- Letting UI state become the source of truth for installed skill entries — always
+  refresh/detect from the filesystem via `DataProvider`.
+- Applying a plan directly while editing a matrix cell — generate → confirm →
+  apply.
+- After a config-mutating action, refreshing only `index` while keeping a stale
+  `config` (see "Config Mutation Requires Full Snapshot Reload").
+- Introducing a global state library; the focused stores + context are enough.

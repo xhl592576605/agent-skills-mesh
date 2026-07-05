@@ -1,0 +1,108 @@
+import { createContext, onMount, useContext, type ParentProps } from "solid-js"
+import { createStore } from "solid-js/store"
+import { ConfigStore } from "../../core/storage/config-store.js"
+import { IndexStore } from "../../core/storage/index-store.js"
+import { StateStore } from "../../core/storage/state-store.js"
+import { refreshIndex } from "../../core/services/refresh-service.js"
+import type { AppConfig } from "../../core/models/config.js"
+import type { IndexFile } from "../../core/models/index.js"
+import type { StateFile } from "../../core/models/state.js"
+
+/**
+ * TUI 数据快照（替代旧 React `useIndexState`）。
+ *
+ * 安全模型不变（design §1）：TUI 只读 config/index/state 快照用于渲染；
+ * 所有 FS 写操作经 core service（install/uninstall/source/doctor）+ ConfirmDialog，
+ * 完成后调 `refresh()` 回写本快照。TUI 本身不直接写 SSOT。
+ */
+export interface DataSnapshot {
+  config: AppConfig | null
+  index: IndexFile | null
+  state: StateFile | null
+  loading: boolean
+  error: Error | null
+}
+
+export interface DataContextValue {
+  snapshot: DataSnapshot
+  /** 重扫源重建 index（写回磁盘）并刷新快照。 */
+  refresh: () => Promise<void>
+  /** 重新从磁盘读 config/state/index（外部修改后用）。 */
+  reload: () => Promise<void>
+}
+
+const DataContext = createContext<DataContextValue>()
+
+export function DataProvider(props: ParentProps) {
+  const [snapshot, setSnapshot] = createStore<DataSnapshot>({
+    config: null,
+    index: null,
+    state: null,
+    loading: true,
+    error: null
+  })
+
+  // store 实例在 Provider 生命周期内复用（与 cli/index.ts loadStores 同款）。
+  const configStore = new ConfigStore()
+  const indexStore = new IndexStore(configStore.home)
+  const stateStore = new StateStore(configStore.home)
+
+  /** 首次加载：config 缺失报错；index 缺失自动 refresh（design §3 DataProvider 契约）。 */
+  async function load() {
+    setSnapshot("loading", true)
+    setSnapshot("error", null)
+    try {
+      if (!(await configStore.exists())) {
+        throw new Error("config.toml not found. Run `asm init` first.")
+      }
+      const config = await configStore.read()
+      const state = await stateStore.read()
+      let index: IndexFile | null = (await indexStore.exists()) ? await indexStore.read() : null
+      if (!index) {
+        index = await refreshIndex(config, state)
+        await indexStore.write(index)
+      }
+      setSnapshot({ config, index, state, loading: false, error: null })
+    } catch (err) {
+      setSnapshot({
+        loading: false,
+        error: err instanceof Error ? err : new Error(String(err))
+      })
+    }
+  }
+
+  /** refresh：重扫源重建 index 并写回，刷新快照中的 index（不重读 config/state）。 */
+  async function refresh() {
+    if (!snapshot.config || !snapshot.state) {
+      await load()
+      return
+    }
+    try {
+      const next = await refreshIndex(snapshot.config, snapshot.state)
+      await indexStore.write(next)
+      setSnapshot("index", next)
+      setSnapshot("error", null)
+    } catch (err) {
+      setSnapshot("error", err instanceof Error ? err : new Error(String(err)))
+    }
+  }
+
+  /** reload：从磁盘重读 config/state/index（config 可能被外部命令改）。 */
+  async function reload() {
+    await load()
+  }
+
+  onMount(() => {
+    void load()
+  })
+
+  const value: DataContextValue = { snapshot, refresh, reload }
+
+  return <DataContext.Provider value={value}>{props.children}</DataContext.Provider>
+}
+
+export function useData(): DataContextValue {
+  const value = useContext(DataContext)
+  if (!value) throw new Error("useData must be used within a DataProvider")
+  return value
+}

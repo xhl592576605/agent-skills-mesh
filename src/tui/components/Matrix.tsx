@@ -1,130 +1,105 @@
-import { Box, Text } from "ink";
-import type { ReactElement } from "react";
-import type { AgentConfig } from "../../core/models/config.js";
-import type { InstallationRecord, InstallationStatus } from "../../core/models/installation.js";
-import type { SkillRecord } from "../../core/models/skill.js";
-import type { MatrixCursor } from "../state/types.js";
-import type { PendingIntent } from "../state/types.js";
+import { For } from "solid-js"
+import type { Theme } from "../theme/index.js"
+import type { InstallationRecord } from "../../core/models/installation.js"
+import type { SkillRecord } from "../../core/models/skill.js"
+import type { MatrixState } from "../state/matrix.js"
+import {
+  type AgentColumn,
+  cellColor,
+  cellInfo,
+  installationKey
+} from "../state/projection.js"
 
 /**
- * Matrix 列描述：config.agents 顺序的展示投影。
+ * skill×agent 表格（design §6）。
  *
- * `id` 是 AgentConfig 在 config.agents 中的 key（域模型本身不带 id），其余字段
- * 复用 `AgentConfig`。`enabledOrdinal` 是该 agent 在「仅 enabled」序列中的下标，
- * 用于把 reducer 的 `cursor.col`（基于 enabled 列）对齐到展示列。
+ * 纯渲染组件：所有状态（cursor/pending/scroll）由父级 `matrix` 提供，本组件只读并映射为
+ * 表头 + 行 + 单元格标签 + 光标高亮。可见行窗口由 `matrix.scrollOffset()` × `viewport` 切片。
  */
-export interface MatrixAgentColumn {
-  readonly id: string;
-  readonly name: string;
-  readonly enabled: boolean;
-  readonly enabledOrdinal: number;
-}
-
-/** pending 的外层结构复用 reducer/state 的形状：skillName → agentId → intent。 */
-export type PendingMap = ReadonlyMap<string, ReadonlyMap<string, PendingIntent>>;
-
 export interface MatrixProps {
-  readonly skills: readonly SkillRecord[];
-  readonly agents: readonly MatrixAgentColumn[];
-  readonly installations: Record<string, InstallationRecord>;
-  readonly pending: PendingMap;
-  readonly cursor: MatrixCursor;
+  rows: readonly SkillRecord[]
+  columns: readonly AgentColumn[]
+  installations: Record<string, InstallationRecord>
+  matrix: MatrixState
+  theme: Theme
+  /** Name 列宽（字符）。 */
+  nameWidth?: number
+  /** 每个 agent 列宽（字符）。 */
+  cellWidth?: number
+  /** 可见行数（决定滚动窗口高度）。 */
+  viewport: number
 }
 
-/** 单元格符号宽度下限（容纳 `[~+]` 与最长 agent id 表头）。 */
-const MIN_CELL_WIDTH = 5;
+export function Matrix(props: MatrixProps) {
+  const theme = props.theme
+  const nameWidth = () => props.nameWidth ?? 24
+  const cellWidth = () => props.cellWidth ?? 9
 
-/**
- * 按 design「屏幕设计 Matrix」把 installation status + pending 意图映射为终端符号。
- *
- * 终端安全：pending 用 `~+/~-` 叠加意图箭头；非 pending 按 status 取符号。
- * 不依赖颜色（颜色仅作辅助），符号本身即信息。
- */
-export function cellSymbol(status: InstallationStatus | undefined, pending: PendingIntent | undefined): string {
-  if (pending === "install") return "~+";
-  if (pending === "uninstall") return "~-";
-  switch (status) {
-    case "installed":
-      return "✓";
-    case "conflict":
-    case "broken-link":
-    case "external":
-      return "!";
-    case "missing":
-      return "·";
-    default:
-      return "○";
+  // 可见窗口（scrollOffset 起 viewport 行）。末尾不足时 slice 自动截断。
+  const visibleRows = () => {
+    const off = props.matrix.scrollOffset()
+    return props.rows.slice(off, off + props.viewport)
   }
-}
-
-/**
- * 由 config.agents 构建 Matrix 列（保留声明顺序，含 disabled；计算 enabledOrdinal）。
- * 与 reducer `matrixDimensions` 的「enabled 列」语义一致：disabled 列展示但不可达。
- */
-export function buildAgentColumns(agents: Readonly<Record<string, AgentConfig>>): MatrixAgentColumn[] {
-  let enabledOrdinal = -1;
-  return Object.entries(agents).map(([id, agent]) => {
-    if (agent.enabled) enabledOrdinal += 1;
-    return { id, name: agent.name, enabled: agent.enabled, enabledOrdinal: agent.enabled ? enabledOrdinal : -1 };
-  });
-}
-
-/** index.installations 的 key 规约（与 install-service detectInstallation 一致）。 */
-function installationKey(skillName: string, agentId: string): string {
-  return `${skillName}:${agentId}`;
-}
-
-/**
- * 纯展示 Matrix（受控）。只渲染符号 + 光标高亮，不调 service、不持有写状态。
- *
- * 行：skills（调用方已按 name 排序）。列：agents（含 disabled，灰显 ×）。
- * 光标格用 `[sym]` 高亮，基于 `cursor.col` 命中的 enabled 列（与 reducer clamp 一致）。
- */
-export function Matrix({ skills, agents, installations, pending, cursor }: MatrixProps): ReactElement {
-  const enabledAgents = agents.filter((agent) => agent.enabled);
-  const nameWidth = skills.reduce((max, skill) => Math.max(max, skill.name.length), "skill".length);
-  const cellWidth = agents.reduce((max, agent) => Math.max(max, agent.id.length + 1), MIN_CELL_WIDTH);
-
-  const formatCell = (token: string, isCursor: boolean): string => {
-    const inner = isCursor ? `[${token}]` : ` ${token} `;
-    return inner.padEnd(cellWidth);
-  };
 
   return (
-    <Box flexDirection="column">
-      <Text>
-        <Text bold>{"skill".padEnd(nameWidth)} </Text>
-        {agents.map((agent) => (
-          <Text key={agent.id} bold dimColor={!agent.enabled}>
-            {` ${agent.id}`.padEnd(cellWidth)}
-          </Text>
-        ))}
-      </Text>
-      {skills.map((skill, row) => {
-        const skillPending = pending.get(skill.name);
-        return (
-          <Text key={skill.name}>
-            <Text bold={row === cursor.row}>{skill.name.padEnd(nameWidth)} </Text>
-            {agents.map((agent) => {
-              const record = installations[installationKey(skill.name, agent.id)];
-              const status: InstallationStatus | undefined = record?.status;
-              const isCursorCell =
-                row === cursor.row && agent.enabled && agent.enabledOrdinal === cursor.col;
-              return (
-                <Text
-                  key={agent.id}
-                  dimColor={!agent.enabled}
-                  color={status === "conflict" || status === "broken-link" || status === "external" ? "yellow" : undefined}
-                >
-                  {formatCell(cellSymbol(status, skillPending?.get(agent.id)), isCursorCell)}
-                </Text>
-              );
-            })}
-          </Text>
-        );
-      })}
-      {enabledAgents.length === 0 ? <Text dimColor>No enabled agents — nothing to install.</Text> : null}
-      {skills.length === 0 ? <Text dimColor>No skills indexed. Run `asm refresh`.</Text> : null}
-    </Box>
-  );
+    <box flexDirection="column">
+      {/* 表头 */}
+      <box flexDirection="row" backgroundColor={theme.backgroundPanel}>
+        <box width={nameWidth()} paddingLeft={1}>
+          <text fg={theme.textMuted}>Name</text>
+        </box>
+        <For each={props.columns}>
+          {(col) => (
+            <box width={cellWidth()} paddingLeft={1}>
+              <text fg={col.enabled ? theme.text : theme.textMuted}>
+                {col.id.slice(0, Math.max(1, cellWidth() - 2))}
+              </text>
+            </box>
+          )}
+        </For>
+      </box>
+
+      {/* 数据行（可见窗口） */}
+      <For each={visibleRows()}>
+        {(skill, i) => {
+          const absRow = () => props.matrix.scrollOffset() + i()
+          const isCursorRow = () => props.matrix.cursor().row === absRow()
+          return (
+            <box flexDirection="row" backgroundColor={isCursorRow() ? theme.backgroundPanel : undefined}>
+              <box width={nameWidth()} paddingLeft={1}>
+                <text fg={isCursorRow() ? theme.text : theme.textMuted}>
+                  {skill.name.length > nameWidth() - 2
+                    ? skill.name.slice(0, nameWidth() - 3) + "…"
+                    : skill.name}
+                </text>
+              </box>
+              <For each={props.columns}>
+                {(col, j) => {
+                  const intent = () => props.matrix.intentFor(skill.name, col.id)
+                  const info = () =>
+                    cellInfo(
+                      props.installations[installationKey(skill.name, col.id)],
+                      col.enabled,
+                      intent()
+                    )
+                  const isCursorCell = () => isCursorRow() && props.matrix.cursor().col === j()
+                  return (
+                    <box
+                      width={cellWidth()}
+                      paddingLeft={1}
+                      backgroundColor={isCursorCell() ? theme.primary : undefined}
+                    >
+                      <text fg={isCursorCell() ? theme.backgroundPanel : cellColor(info().kind, theme)}>
+                        {info().label}
+                      </text>
+                    </box>
+                  )
+                }}
+              </For>
+            </box>
+          )
+        }}
+      </For>
+    </box>
+  )
 }

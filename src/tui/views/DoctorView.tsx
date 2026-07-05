@@ -1,0 +1,256 @@
+import fs from "node:fs/promises"
+import { useTerminalDimensions } from "@opentui/solid"
+import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js"
+import { useTheme } from "../context/theme.js"
+import { useData } from "../context/data.js"
+import { useDialog } from "../context/dialog.js"
+import { useViewKey, type ViewKeyHandler } from "../context/view-key.js"
+import { ConfigStore } from "../../core/storage/config-store.js"
+import { IndexStore } from "../../core/storage/index-store.js"
+import { StateStore } from "../../core/storage/state-store.js"
+import { runDoctor, type DoctorCheck, type DoctorFix } from "../../core/services/doctor-service.js"
+import { applyRepairPlan, buildRepairPlan } from "../../core/services/install-service.js"
+import { ConfirmDialog } from "../dialogs/ConfirmDialog.js"
+
+/**
+ * Doctor 视图（design §9 `doctor` 映射）。
+ *
+ * 展示 `runDoctor` checks（external/broken-link/orphan/source-missing/conflict/agent-dir/...），
+ * 对可修复项（check.fix 存在）支持 `f` 单修 / `F` 全修：
+ * - `refresh-index` → data.refresh()
+ * - `mkdir-agent-dir` → fs.mkdir(targetPath, {recursive:true})
+ * - `repair-broken-link` → buildRepairPlan + applyRepairPlan
+ *
+ * orphan/external 等无 fix 的项仅展示（adopt 候选提示用户去 source add / rebind）。
+ *
+ * **键盘路由**（design §6）：经 `useViewKey().setHandler` 注册内联 handler，本视图不自注册 useKeyboard。
+ */
+export function DoctorView() {
+  const theme = useTheme()
+  const data = useData()
+  const dialog = useDialog()
+  const viewKey = useViewKey()
+  const dim = useTerminalDimensions()
+  const [checks, setChecks] = createSignal<DoctorCheck[]>([])
+  const [cursor, setCursor] = createSignal(0)
+  const [message, setMessage] = createSignal("")
+  const [busy, setBusy] = createSignal(false)
+
+  const selected = (): DoctorCheck | undefined => {
+    const list = checks()
+    const i = cursor()
+    return i >= 0 && i < list.length ? list[i] : undefined
+  }
+
+  async function loadDoctor(): Promise<void> {
+    const configStore = new ConfigStore()
+    const indexStore = new IndexStore(configStore.home)
+    try {
+      const result = await runDoctor(
+        configStore,
+        indexStore,
+        data.snapshot.config ?? undefined,
+        data.snapshot.index ?? undefined
+      )
+      setChecks(result)
+    } catch (err) {
+      setMessage(`doctor failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  // 首次 + index 变化（reload/refresh 后）时重跑 doctor。
+  onMount(() => void loadDoctor())
+  createEffect(() => {
+    // 访问 snapshot.index 触发响应式追踪（refresh 后 index 引用变 → 重跑）。
+    void data.snapshot.index?.updatedAt
+    void data.snapshot.config?.version
+    if (!data.snapshot.loading) void loadDoctor()
+  })
+
+  // cursor clamp（checks 变化时）。
+  createEffect(() => {
+    const max = Math.max(0, checks().length - 1)
+    if (cursor() > max) setCursor(max)
+  })
+
+  const handler: ViewKeyHandler = (key) => {
+    const k = key.name
+    if (k === "up" || k === "k") {
+      setCursor((c) => Math.max(0, c - 1))
+      return true
+    }
+    if (k === "down" || k === "j") {
+      setCursor((c) => Math.min(Math.max(0, checks().length - 1), c + 1))
+      return true
+    }
+    // 注意：opentui KeyEvent 字母键 name 始终小写，shift 通过 key.shift 表示
+    // （shift+f -> name="f" shift=true sequence="F"）。故用 key.shift 区分 f/F，
+    // 且 shift 分支须在普通 f 之前判断，否则被 fixOne 吞掉。
+    if (k === "f" && key.shift) {
+      void fixAll()
+      return true
+    }
+    if (k === "f") {
+      void fixOne()
+      return true
+    }
+    // 1/2/3/ctrl+r/esc/? 交回 AppShell。
+    return false
+  }
+  onMount(() => viewKey.setHandler(handler))
+  onCleanup(() => viewKey.setHandler(null))
+
+  async function sync(): Promise<void> {
+    await data.reload()
+    await data.refresh()
+    await loadDoctor()
+  }
+
+  async function fixOne(): Promise<void> {
+    const check = selected()
+    if (!check) return
+    if (!check.fix) {
+      setMessage(`${check.kind}: no auto-fix (manual action needed)`)
+      return
+    }
+    const ok = await ConfirmDialog.show(
+      dialog,
+      `Fix ${check.kind}?`,
+      check.message,
+      { confirmLabel: "fix", cancelLabel: "cancel" }
+    )
+    if (!ok) return
+    setBusy(true)
+    try {
+      await applyFix(check.fix)
+      await sync()
+      setMessage(`fixed: ${check.kind}`)
+    } catch (err) {
+      setMessage(`fix failed: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function fixAll(): Promise<void> {
+    const fixable = checks().filter((c) => c.fix)
+    if (fixable.length === 0) {
+      setMessage("no fixable issues")
+      return
+    }
+    const ok = await ConfirmDialog.show(
+      dialog,
+      "Fix all fixable?",
+      `${fixable.length} issue(s): ${fixable.map((c) => c.kind).join(", ")}`,
+      { confirmLabel: "fix all", cancelLabel: "cancel" }
+    )
+    if (!ok) return
+    setBusy(true)
+    const errors: string[] = []
+    try {
+      // 每次修复后 sync（reload/refresh/loadDoctor）让后续修复基于最新状态。
+      for (const check of fixable) {
+        try {
+          await applyFix(check.fix!)
+          await sync()
+        } catch (err) {
+          errors.push(`${check.kind}: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+      setMessage(errors.length ? `fixed with ${errors.length} error(s): ${errors.join("; ")}` : `fixed ${fixable.length} issue(s)`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** 按 fix.type 调度（「哪些可修复」的知识留在 doctor-service）。 */
+  async function applyFix(fix: DoctorFix): Promise<void> {
+    if (fix.type === "refresh-index") {
+      await data.refresh()
+      return
+    }
+    if (fix.type === "mkdir-agent-dir" && fix.targetPath) {
+      await fs.mkdir(fix.targetPath, { recursive: true })
+      return
+    }
+    if (fix.type === "repair-broken-link" && fix.skillName && fix.agentId) {
+      const { config, index, state } = data.snapshot
+      if (!config || !index || !state) throw new Error("snapshot not loaded")
+      const plan = await buildRepairPlan(config, index, fix.skillName, fix.agentId, state)
+      if (plan.hasConflict) throw new Error(`repair conflict: ${plan.warnings.join("; ")}`)
+      await applyRepairPlan(plan)
+      return
+    }
+    throw new Error(`unsupported fix type: ${fix.type}`)
+  }
+
+  const statusColor = (status: DoctorCheck["status"]) =>
+    status === "ok" ? theme.success : status === "warning" ? theme.warning : theme.danger
+
+  const statusLabel = (status: DoctorCheck["status"]) =>
+    status === "ok" ? "ok" : status === "warning" ? "warn" : "error"
+
+  const statusLine = () => {
+    if (busy()) return "working..."
+    if (message()) return message()
+    const c = checks()
+    const errors = c.filter((x) => x.status === "error").length
+    const warns = c.filter((x) => x.status === "warning").length
+    return `${c.length} check(s) · ${errors} error · ${warns} warn`
+  }
+
+  return (
+    <box flexDirection="column" flexGrow={1} width={dim().width}>
+      <box flexDirection="row" backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1}>
+        <text width={6} fg={theme.textMuted}>state</text>
+        <text width={20} fg={theme.textMuted}>kind</text>
+        <text fg={theme.textMuted}>message · fix</text>
+      </box>
+      <box flexGrow={1} flexDirection="column">
+        <Show
+          when={checks().length > 0}
+          fallback={
+            <box paddingLeft={1}>
+              <text fg={theme.textMuted}>Running doctor...</text>
+            </box>
+          }
+        >
+          <For each={checks()}>
+            {(check, i) => (
+              <box
+                flexDirection="row"
+                paddingLeft={1}
+                paddingRight={1}
+                backgroundColor={i() === cursor() ? theme.primary : undefined}
+              >
+                <text
+                  width={6}
+                  fg={i() === cursor() ? theme.backgroundPanel : statusColor(check.status)}
+                >
+                  {statusLabel(check.status)}
+                </text>
+                <text
+                  width={20}
+                  fg={i() === cursor() ? theme.backgroundPanel : theme.text}
+                  wrapMode="none"
+                >
+                  {check.kind}
+                </text>
+                <text
+                  fg={i() === cursor() ? theme.backgroundPanel : theme.textMuted}
+                  wrapMode="none"
+                >
+                  {check.message}
+                  {check.fix ? "  [fixable]" : ""}
+                </text>
+              </box>
+            )}
+          </For>
+        </Show>
+      </box>
+      <box height={1} backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1}>
+        <text fg={message() ? theme.warning : theme.textMuted}>{statusLine()}</text>
+      </box>
+    </box>
+  )
+}

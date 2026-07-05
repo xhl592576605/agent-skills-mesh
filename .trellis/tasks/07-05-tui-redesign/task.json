@@ -1,0 +1,31 @@
+{
+  "id": "tui-redesign",
+  "name": "tui-redesign",
+  "title": "TUI 重设计（框架选型 + 交互范式）",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "xuhuale",
+  "assignee": "xuhuale",
+  "createdAt": "2026-07-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-05-tui-infra",
+    "07-05-tui-matrix",
+    "07-05-tui-views",
+    "07-05-tui-test-spec"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

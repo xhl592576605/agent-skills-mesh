@@ -1,18 +1,35 @@
 # Frontend Development Guidelines
 
-> Frontend and future TUI guidance for Agent Skills Mesh.
+> TUI guidance for Agent Skills Mesh (SolidJS + OpenTUI on Bun).
 
 ---
 
 ## Overview
 
-Agent Skills Mesh currently has no production Web frontend and no implemented TUI. The existing product surface is a TypeScript CLI backed by core services. Frontend guidelines document this current absence and define boundaries for the planned Ink/React terminal UI so future agents do not invent browser patterns that do not exist in the repository.
+The user-facing surface of Agent Skills Mesh is a **terminal UI** built with
+**[SolidJS](https://www.solidjs.com/) + [`@opentui/solid`](https://github.com/sst/opentui)**,
+running on the **Bun** runtime. There is no browser/Web frontend. The TUI renders
+the same core services that the text CLI uses, so domain behavior stays in
+`src/core/**` and the TUI is a thin interactive layer over typed service outputs.
 
-Evidence:
+Evidence (current tree):
 
-- `src/` contains `cli/`, `core/`, and `utils/`, with no `tui/` directory.
-- `package.json` has `cac` and `gray-matter` runtime dependencies, but no React/Ink runtime dependencies.
-- `.trellis/tasks/archive/2026-07/07-02-agent-skills-mesh/design.md` plans a future Ink/React TUI with Matrix, Discover, and Doctor screens.
+- `src/tui/**` exists and is implemented (entry `src/tui/index.tsx` +
+  `src/tui/App.tsx`, plus `theme/`, `context/`, `state/`, `components/`,
+  `dialogs/`, `views/`).
+- `package.json` runtime dependencies: `@opentui/core`, `@opentui/solid`,
+  `@opentui/keymap` (locked to `^0.4.3`), `solid-js`, `commander`, `gray-matter`.
+- `package.json` scripts: `dev` runs `bun run src/cli/index.ts`; `test` runs
+  `vitest run`; `typecheck` runs `tsc --noEmit`.
+- `bunfig.toml` preloads `@opentui/solid/preload` so the Solid JSX transform
+  produces reactive getters under Bun.
+- `tsconfig.json` uses `jsx: "preserve"` + `jsxImportSource: "@opentui/solid"`
+  (the Solid transform is applied by the Bun preload plugin, **not** by a
+  classic runtime).
+
+The CLI (`src/cli/index.ts`) lazily imports the TUI via
+`const { run } = await import("../tui/index.js")` inside the `tui` command, and
+keeps a TTY check so non-TTY contexts degrade to text output.
 
 ---
 
@@ -20,25 +37,25 @@ Evidence:
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Current no-frontend state and planned `src/tui/**` boundary | Active |
-| [Component Guidelines](./component-guidelines.md) | Future Ink/React component boundaries and props guidance | Active |
-| [Hook Guidelines](./hook-guidelines.md) | Current no-hook state and future hook constraints | Active |
-| [State Management](./state-management.md) | Current config/index/plan state model and future pending-plan flow | Active |
-| [Quality Guidelines](./quality-guidelines.md) | Verification and safety requirements for future TUI work | Active |
-| [Type Safety](./type-safety.md) | Reusing strict TypeScript core model types in UI code | Active |
+| [Directory Structure](./directory-structure.md) | Real `src/tui/**` layout and APFS naming constraint | Active |
+| [Component Guidelines](./component-guidelines.md) | OpenTUI `box`/`text` primitives, props, portals, element factories | Active |
+| [Solid Patterns](./solid-patterns.md) | Signals/stores/effects, `useKeyboard`, `useViewKey`, owner-context pitfalls | Active |
+| [State Management](./state-management.md) | Snapshot store, pending matrix state, dialog stack, centralized key routing | Active |
+| [Quality Guidelines](./quality-guidelines.md) | OpenTUI testing, color-free safety, dialog confirm model, core-zero-change | Active |
+| [Type Safety](./type-safety.md) | Reusing strict core model types in SolidJS code | Active |
 
 ---
 
 ## Non-Applicable Areas
 
-The following do not apply until a real Web frontend is introduced:
+The following do not apply to this codebase:
 
-- Browser routing frameworks.
-- CSS modules, Tailwind, styled-components, or asset pipelines.
-- DOM event and browser accessibility APIs.
+- Browser routing frameworks, CSS modules, Tailwind, styled-components, asset pipelines.
+- DOM event and browser accessibility APIs (the TUI uses OpenTUI key/mouse events).
 - Server-side rendering or client/server data fetching libraries.
 
-Future TUI work should follow terminal UI constraints and reuse the existing core service layer.
+All TUI data is local filesystem state read through `ConfigStore`, `IndexStore`,
+and `StateStore`; never invent HTTP/cache abstractions.
 
 ---
 
