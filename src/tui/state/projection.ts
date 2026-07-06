@@ -22,15 +22,21 @@ export interface AgentColumn {
 /**
  * 从 `config.agents` 投影为有序列数组。
  *
- * 保持 config 声明顺序（列稳定，cursor 移动可预测）。disabled agent 也保留为列，
- * 单元格显示 `—`，让用户看到哪些 agent 被禁用（design §6）。
+ * 保持 config 声明顺序（列稳定，cursor 移动可预测）。默认保留 disabled agent 列
+ * （单元格显示 `—`，design §6）；R5 起 matrix 默认隐藏 disabled 列，由调用方传
+ * `{ includeDisabled: false }` 过滤，`A` 键可临时切换显示。
  */
-export function buildAgentColumns(agents: Record<string, AgentConfig>): AgentColumn[] {
-  return Object.entries(agents).map(([id, agent]) => ({
+export function buildAgentColumns(
+  agents: Record<string, AgentConfig>,
+  opts?: { includeDisabled?: boolean }
+): AgentColumn[] {
+  const includeDisabled = opts?.includeDisabled ?? true;
+  const cols = Object.entries(agents).map(([id, agent]) => ({
     id,
     name: agent.name || id,
     enabled: agent.enabled
-  }))
+  }));
+  return includeDisabled ? cols : cols.filter((c) => c.enabled);
 }
 
 /**

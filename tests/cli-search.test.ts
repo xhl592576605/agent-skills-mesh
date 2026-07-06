@@ -50,15 +50,23 @@ describe("asm skill search (CLI format + filtering)", () => {
     await indexStore.write(index);
 
     // 未 installed 的 configured-source 候选归 discovered（"可纳管"）。
+    // R2：formatSkillRows 现输出「表头 + 分隔线 + 固定列宽行」。
     const reactRows = formatSkillRows(searchSkills(index, "react"));
-    expect(reactRows).toEqual([
-      "react-core\tdiscovered\tcore react skill",
-      "react-helper\tdiscovered\tUI components"
-    ]);
+    expect(reactRows[0]).toMatch(/^NAME\s/); // 表头
+    expect(reactRows[1]).toMatch(/^─+$/); // 分隔线
+    const reactCore = reactRows.find((row) => row.startsWith("react-core"));
+    const reactHelper = reactRows.find((row) => row.startsWith("react-helper"));
+    expect(reactCore).toBeDefined();
+    expect(reactCore!).toContain("discovered");
+    expect(reactCore!).toContain("core react skill");
+    expect(reactHelper).toBeDefined();
+    expect(reactHelper!).toContain("discovered");
+    expect(reactHelper!).toContain("UI components");
 
-    // 空关键字返回全部，按 name 排序。
+    // 空关键字返回全部，按 name 排序（跳过表头 + 分隔线）。
     const allRows = formatSkillRows(searchSkills(index, ""));
-    expect(allRows.map((row) => row.split("\t")[0])).toEqual(["backend-tools", "react-core", "react-helper"]);
+    const dataRows = allRows.slice(2);
+    expect(dataRows.map((row) => row.split(/\s+/)[0])).toEqual(["backend-tools", "react-core", "react-helper"]);
   });
 });
 

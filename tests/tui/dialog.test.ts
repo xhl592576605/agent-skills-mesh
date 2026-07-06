@@ -72,6 +72,29 @@ describe("createDialogStore — replace", () => {
   })
 })
 
+describe("createDialogStore — push", () => {
+  it("push 追加栈顶，不回调旧栈 onClose（叠加子弹窗用）", () => {
+    const s = createDialogStore()
+    const onCloseBase = vi.fn()
+    s.replace(el(), onCloseBase)
+    s.push(el())
+    expect(s.items).toHaveLength(2)
+    expect(onCloseBase).not.toHaveBeenCalled()
+  })
+
+  it("closeTop 关栈顶后，下层弹窗重新成为栈顶（不动其 onClose）", () => {
+    const s = createDialogStore()
+    const onCloseBase = vi.fn()
+    const onCloseTop = vi.fn()
+    s.replace(el(), onCloseBase)
+    s.push(el(), onCloseTop)
+    s.closeTop()
+    expect(onCloseTop).toHaveBeenCalledOnce()
+    expect(onCloseBase).not.toHaveBeenCalled()
+    expect(s.items).toHaveLength(1)
+  })
+})
+
 describe("createDialogStore — closeTop", () => {
   it("closeTop 回调栈顶 onClose 并移除", () => {
     const s = createDialogStore()

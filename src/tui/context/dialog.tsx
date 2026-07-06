@@ -28,6 +28,8 @@ export interface DialogStackItem {
 export interface DialogContextValue {
   /** 替换栈为单个弹窗（opencode 语义，整栈先回调 onClose 再置为新弹窗）。 */
   replace: (element: () => JSX.Element, onClose?: () => void) => void
+  /** 追加栈顶弹窗（不回调旧栈 onClose）：用于叠加子弹窗（如多选中查看 SKILL.md），关闭走 closeTop 回栈。 */
+  push: (element: () => JSX.Element, onClose?: () => void) => void
   /** 关闭栈顶弹窗，回调其 onClose。 */
   closeTop: () => void
   /** 关闭整栈，逐个回调 onClose。 */
@@ -71,8 +73,14 @@ export function createDialogStore(): DialogContextValue & {
     setStack([{ element, onClose }])
   }
 
+  /** 追加栈顶弹窗（不回调旧栈 onClose）：用于叠加子弹窗（如多选中按 `i` 查看 SKILL.md），关闭走 closeTop 回栈。 */
+  function push(element: () => JSX.Element, onClose?: () => void) {
+    setStack([...stack, { element, onClose }])
+  }
+
   return {
     replace,
+    push,
     closeTop,
     clear,
     isOpen: () => stack.length > 0,

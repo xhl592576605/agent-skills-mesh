@@ -7,8 +7,10 @@ import { refreshIndex } from "../core/services/refresh-service.js";
 import { applyInstallPlan, applyUninstallPlan, buildInstallPlan, buildUninstallPlan } from "../core/services/install-service.js";
 import { runDoctor } from "../core/services/doctor-service.js";
 import { addSource, listSources, removeSource, setSourceEnabled, sourceUpdate } from "../core/services/source-service.js";
-import { searchSkills, skillAdd, skillRebind, skillRemove, skillUpdate } from "../core/services/skill-service.js";
-import { formatSkillRows } from "./skill-format.js";
+import { searchSkills, skillAdd, skillRebind, skillRemove, skillUpdate, listInstalledSkills } from "../core/services/skill-service.js";
+import { addAgent, listAgents, removeAgent, setAgentEnabled } from "../core/services/agent-service.js";
+import { formatSkillRows, formatInstalledRows } from "./skill-format.js";
+import { renderTable } from "./columns.js";
 import type { SkillRecord } from "../core/models/skill.js";
 import type { InstallAction } from "../core/models/install-plan.js";
 
@@ -102,12 +104,17 @@ source
       console.log("No sources to update.");
       return;
     }
-    for (const report of reports) {
+    const updateRows = reports.map((report) => {
       const status = report.success ? "ok" : `failed${report.error ? `: ${report.error}` : ""}`;
-      console.log(`${report.sourceId}\t${report.action}\t${status}`);
-      if (report.updatableSkills.length) console.log(`  updatable: ${report.updatableSkills.join(", ")} (run \`asm skill update <name>\` or \`asm skill update --all\`)`);
-      if (report.upToDateSkills.length) console.log(`  up-to-date: ${report.upToDateSkills.join(", ")}`);
-    }
+      const detail = report.updatableSkills.length
+        ? `updatable: ${report.updatableSkills.join(", ")}`
+        : report.upToDateSkills.length
+          ? "up-to-date"
+          : "—";
+      return [report.sourceId, report.action, status, detail];
+    });
+    for (const line of renderTable(["SOURCE", "ACTION", "STATUS", "DETAIL"], updateRows, [18, 8, 24, 48])) console.log(line);
+    if (reports.some((r) => r.updatableSkills.length)) console.log("Run `asm skill update <name>` or `asm skill update --all` to apply.");
     const refreshed = await refreshIndex(await configStore.read(), await stateStore.read());
     await indexStore.write(refreshed);
   });
@@ -133,10 +140,11 @@ source
       console.log("No sources configured.");
       return;
     }
-    for (const s of sources) {
+    const sourceRows = sources.map((s) => {
       const meta = [s.url ? `url=${s.url}` : "", s.branch ? `branch=${s.branch}` : ""].filter(Boolean).join(" ");
-      console.log(`${s.id}\t${s.type}\t${s.enabled ? "enabled" : "disabled"}\t${s.path}${meta ? `\t${meta}` : ""}`);
-    }
+      return [s.id, s.type, s.enabled ? "enabled" : "disabled", s.path, meta];
+    });
+    for (const line of renderTable(["ID", "TYPE", "ENABLED", "PATH", "META"], sourceRows, [18, 12, 9, 44, 24])) console.log(line);
   });
 
 source
@@ -184,11 +192,15 @@ skill
 
 skill
   .command("list")
-  .description("List installed skills (managed + orphan)")
+  .description("List skills copied into SSOT (installed)")
   .action(async () => {
-    const { index } = await loadStores();
-    const skills = Object.values(index.skills).sort((a, b) => a.name.localeCompare(b.name));
-    printSkillLines(skills, "No skills indexed. Run `asm refresh` first.");
+    const { index, state } = await loadStores();
+    const rows = listInstalledSkills(state, index);
+    if (!rows.length) {
+      console.log("No skills added yet. Run `asm skill search` then `asm skill add <name>`." );
+      return;
+    }
+    for (const line of formatInstalledRows(rows)) console.log(line);
   });
 
 skill
@@ -223,10 +235,11 @@ skill
     if (!target) throw new Error("Usage: asm skill update <name|--all>");
     const { configStore, stateStore, indexStore } = await loadStores();
     const reports = await skillUpdate(configStore, stateStore, target);
-    for (const r of reports) {
-      const detail = r.success ? `updated ${r.oldHash?.slice(0, 8) ?? "?"} -> ${r.newHash?.slice(0, 8) ?? "?"}` : `failed: ${r.error}`;
-      console.log(`${r.skillName}\t${detail}`);
-    }
+    const skillRows = reports.map((r) => {
+      const detail = r.success ? `${r.oldHash?.slice(0, 8) ?? "?"} -> ${r.newHash?.slice(0, 8) ?? "?"}` : `failed: ${r.error}`;
+      return [r.skillName, r.success ? "ok" : "failed", detail];
+    });
+    for (const line of renderTable(["SKILL", "STATUS", "DETAIL"], skillRows, [24, 9, 48])) console.log(line);
     const refreshed = await refreshIndex(await configStore.read(), await stateStore.read());
     await indexStore.write(refreshed);
   });
@@ -274,6 +287,62 @@ skill
     printPlan(plan.actions, plan.hasConflict);
     await applyUninstallPlan(plan, stateStore);
     console.log(`Disabled ${name} for ${options.agent}`);
+  });
+
+// === Agent 启停（R5） ===
+
+const agentCmd = program.command("agent").description("Agent commands: list, add, remove, enable, disable");
+
+agentCmd
+  .command("list")
+  .description("List configured agents with install status")
+  .action(async () => {
+    const { config } = await loadStores();
+    const rows = await listAgents(config);
+    if (!rows.length) {
+      console.log("No agents configured.");
+      return;
+    }
+    const data = rows.map((r) => [r.id, r.name, r.installed ? "installed" : "missing", r.enabled ? "enabled" : "disabled", r.skills_dir]);
+    for (const line of renderTable(["ID", "NAME", "INSTALLED", "ENABLED", "SKILLS_DIR"], data, [12, 14, 10, 9, 30])) console.log(line);
+  });
+
+agentCmd
+  .command("enable <id>")
+  .description("Enable an agent (matrix column + symlink target)")
+  .action(async (id: string) => {
+    const { configStore } = await loadStores();
+    await setAgentEnabled(configStore, id, true);
+    console.log(`Enabled agent ${id}`);
+  });
+
+agentCmd
+  .command("disable <id>")
+  .description("Disable an agent (hide column, skip symlink)")
+  .action(async (id: string) => {
+    const { configStore } = await loadStores();
+    await setAgentEnabled(configStore, id, false);
+    console.log(`Disabled agent ${id}`);
+  });
+
+agentCmd
+  .command("add <id>")
+  .description("Add a custom agent with its skills_dir (then appears in matrix)")
+  .requiredOption("--skills-dir <path>", "agent skills directory (symlink target)")
+  .option("--name <name>", "display name (defaults to id)")
+  .action(async (id: string, options: { skillsDir: string; name?: string }) => {
+    const { configStore } = await loadStores();
+    const agent = await addAgent(configStore, id, { skillsDir: options.skillsDir, name: options.name });
+    console.log(`Added agent ${id} -> ${agent.skills_dir}`);
+  });
+
+agentCmd
+  .command("remove <id>")
+  .description("Remove a custom agent (builtin cannot be removed; disable instead). Detaches only ASM-managed symlinks under its skills_dir, then deletes config.")
+  .action(async (id: string) => {
+    const { configStore, stateStore } = await loadStores();
+    await removeAgent(configStore, stateStore, id);
+    console.log(`Removed agent ${id} (detached ASM-managed symlinks; left other files untouched)`);
   });
 
 program.parseAsync(process.argv).catch((err: unknown) => {

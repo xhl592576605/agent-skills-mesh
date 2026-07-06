@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { AgentConfig, AppConfig, SourceConfig, SourceType } from "../models/config.js";
 import { atomicWriteFile, ensureDir, pathExists } from "../../utils/fs.js";
-import { getAsmHome } from "../../utils/path.js";
+import { getAsmHome, resolveConfiguredPath } from "../../utils/path.js";
 
 export function createDefaultConfig(): AppConfig {
   return {
@@ -28,6 +28,24 @@ export function createDefaultConfig(): AppConfig {
   };
 }
 
+/**
+ * agent 安装检测（task 07-06-cli-tui-bugfix · R5）。
+ * 判据：`skills_dir` 的父目录（dirname）是否存在（claude→`~/.claude`、codex→`~/.codex`…）。
+ * 仅影响 init 默认值与 `agent list` 展示，不阻止用户手动启停。
+ */
+export function agentDetectPath(agent: AgentConfig): string {
+  return path.dirname(resolveConfiguredPath(agent.skills_dir));
+}
+
+export async function detectAgentInstalled(agent: AgentConfig): Promise<boolean> {
+  return pathExists(agentDetectPath(agent));
+}
+
+/** 是否内置 agent（createDefaultConfig 的默认集合，不可删除，只能禁用）。 */
+export function isBuiltinAgent(id: string): boolean {
+  return Object.prototype.hasOwnProperty.call(createDefaultConfig().agents, id);
+}
+
 export class ConfigStore {
   readonly home: string;
   readonly configPath: string;
@@ -50,6 +68,10 @@ export class ConfigStore {
     }
 
     const config = createDefaultConfig();
+    // R5：首次创建/force 时按安装检测决定每个 agent 的 enabled（未安装 → disabled）。
+    for (const agent of Object.values(config.agents)) {
+      agent.enabled = await detectAgentInstalled(agent);
+    }
     await fs.writeFile(this.configPath, serializeConfig(config), "utf8");
     const statePath = path.join(this.home, "state.json");
     if (options.force || !(await pathExists(statePath))) {

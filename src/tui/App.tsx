@@ -22,17 +22,16 @@ const TABS: { key: Tab; label: string }[] = [
 
 /** 各 tab 的快捷键提示（注入 StatusBar，design §13 契约）。child-3 扩展 source/doctor。 */
 const TAB_HINTS: Record<Tab, readonly string[]> = {
-  // a=行全装、d=行全卸（对称命名，避免「d none」被误解为清空）；ctrl+r=全局刷新。
+  // skill×agent matrix：a=行全装、d=删除 skill、A=打开 agent 管理弹窗（启停/添加）。
   skill: [
     "↑↓←→ move",
     "enter toggle",
     "a row-on",
-    "d row-off",
+    "d delete",
     "r review",
+    "m agents",
     "/ search",
-    "ctrl+r refresh",
-    "? help",
-    "1/2/3 tabs"
+    "? help"
   ],
   source: [
     "↑↓ move",
@@ -128,7 +127,7 @@ function AppShell() {
         <text fg={theme.accent}>global</text>
         <text fg={theme.textMuted}>1/2/3 tabs · ctrl+r refresh · ? help · esc/ctrl+c exit</text>
         <text fg={theme.accent}>skill×agent</text>
-        <text fg={theme.textMuted}>{"↑↓←→/hjkl move · enter toggle · a row-on · d row-off · r review · / search"}</text>
+        <text fg={theme.textMuted}>{"↑↓←→/hjkl move · enter toggle · a row-on · d delete · r review · i info · m agents (space toggle · a add) · / search"}</text>
         <text fg={theme.accent}>source</text>
         <text fg={theme.textMuted}>{"a add · u update · d remove · e/x enable/disable · enter detail"}</text>
         <text fg={theme.accent}>doctor</text>

@@ -367,14 +367,21 @@ describe("createSkillAgentKeyHandler — 非搜索态键路由", () => {
     expect(deps.matrix.intentFor("skill-a", "claude")).toBe("install")
   })
 
-  it("a=行全装、d=行全卸", () => {
-    const deps = makeHandlerDeps()
+  it("a=行全装；d=删除当前 skill（触发 onDeleteSkill）", () => {
+    const onDeleteSkill = vi.fn()
+    const deps = makeHandlerDeps({ onDeleteSkill })
     const handler = createSkillAgentKeyHandler(deps)
     expect(handler(key("a"))).toBe(true)
     expect(deps.matrix.intentFor("skill-a", "claude")).toBe("install")
     expect(deps.matrix.intentFor("skill-a", "cursor")).toBe("install")
     expect(handler(key("d"))).toBe(true)
-    // 行全卸对未安装项是 clear（off 不写 intent）
+    expect(onDeleteSkill).toHaveBeenCalledWith("skill-a")
+  })
+
+  it("d 未注入 onDeleteSkill 时 fallthrough（返回 false）", () => {
+    const deps = makeHandlerDeps()
+    const handler = createSkillAgentKeyHandler(deps)
+    expect(handler(key("d"))).toBe(false)
   })
 
   it("r 触发 review（调用 onReview）", () => {

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { IndexFile } from "../models/index.js";
 import type { AppConfig } from "../models/config.js";
-import type { SkillRecord } from "../models/skill.js";
+import type { SkillRecord, SkillStatus } from "../models/skill.js";
 import type { InstalledSkillRecord, StateFile } from "../models/state.js";
 import { ConfigStore } from "../storage/config-store.js";
 import type { StateStore } from "../storage/state-store.js";
@@ -37,6 +37,38 @@ export function searchSkills(index: IndexFile, keyword: string): SkillRecord[] {
     if (skill.tags.some((tag) => tag.toLowerCase().includes(needle))) return true;
     return false;
   });
+}
+
+/**
+ * 已 add 到 SSOT 的 skill 行（task 07-06-cli-tui-bugfix · R1）。
+ * 与 `searchSkills`（来源候选）相对：本接口面向「已入库」视图，供 CLI `skill list` 与 TUI matrix 行共用。
+ */
+export interface InstalledSkillRow {
+  name: string;
+  status: SkillStatus;
+  sourceId?: string;
+  agents: string[];
+  description?: string;
+}
+
+/**
+ * 列出已 add 到 SSOT 的 skill（R1）。从 `state.installedSkills` 投影，关联 `index.skills[name]`
+ * 取 status/description（index 缺失时 status 回退 managed、description 回退 installed record）。
+ * 按 name 排序。纯函数，便于 CLI/TUI/测试共用。
+ */
+export function listInstalledSkills(state: StateFile, index: IndexFile): InstalledSkillRow[] {
+  return Object.values(state.installedSkills)
+    .map((record): InstalledSkillRow => {
+      const indexed = index.skills[record.skillName];
+      return {
+        name: record.skillName,
+        status: indexed?.status ?? "managed",
+        sourceId: record.source.kind === "configured-source" ? record.source.sourceId : undefined,
+        agents: Object.keys(record.enabledAgents),
+        description: indexed?.description ?? record.description,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**

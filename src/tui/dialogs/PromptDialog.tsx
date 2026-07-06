@@ -1,5 +1,5 @@
-import { useKeyboard } from "@opentui/solid"
-import { TextAttributes } from "@opentui/core"
+import { useKeyboard, usePaste } from "@opentui/solid"
+import { PasteEvent, TextAttributes } from "@opentui/core"
 import type { ParentProps } from "solid-js"
 import { createSignal } from "solid-js"
 import { useTheme } from "../context/theme.js"
@@ -39,8 +39,9 @@ export function PromptDialog(props: ParentProps<PromptDialogProps>) {
   useKeyboard((key) => {
     if (key.name === "return") {
       const v = value()
-      dialog.clear()
+      // onConfirm 先 resolve(v)，再 dialog.clear()（clear 先会因 onClose 抢先 resolve(undefined) 丢失输入）。
       props.onConfirm(v)
+      dialog.clear()
       return
     }
     if (key.name === "backspace") {
@@ -53,6 +54,13 @@ export function PromptDialog(props: ParentProps<PromptDialogProps>) {
     if (ch && ch.length === 1 && /[\x20-\x7e]/.test(ch)) {
       setValue((v) => v + ch)
     }
+  })
+
+  // R3：支持终端粘贴（macOS cmd+v / ctrl+v / bracketed paste）。usePaste 内部已注册+清理。
+  // PasteEvent.bytes 解码 utf8 后过滤控制字符（保留可打印 + unicode），追加到 value。
+  usePaste((event: PasteEvent) => {
+    const text = Buffer.from(event.bytes).toString("utf8").replace(/[\x00-\x1f\x7f]/g, "")
+    if (text) setValue((v) => v + text)
   })
 
   const display = () => value() || (props.placeholder ?? "")

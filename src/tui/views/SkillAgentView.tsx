@@ -13,7 +13,9 @@ import {
   buildUninstallPlan
 } from "../../core/services/install-service.js"
 import { ConfirmDialog } from "../dialogs/ConfirmDialog.js"
+import { skillRemove } from "../../core/services/skill-service.js"
 import { SkillDetailDialog } from "../dialogs/SkillDetailDialog.js"
+import { AgentManagerDialog } from "../dialogs/AgentManagerDialog.js"
 import { createMatrixState, type MatrixState } from "../state/matrix.js"
 import { createSearchState, filterSkills } from "../state/search.js"
 import { buildAgentColumns, installationKey, type AgentColumn, type Intent } from "../state/projection.js"
@@ -22,6 +24,7 @@ import {
   type SkillAgentKeyDeps
 } from "../state/skill-agent-keys.js"
 import { Matrix } from "../components/Matrix.js"
+import type { SkillRecord } from "../../core/models/skill.js"
 import { SearchBar } from "../components/SearchBar.js"
 import { Inspector } from "../components/Inspector.js"
 
@@ -57,14 +60,21 @@ export function SkillAgentView() {
   // 预留行：TabBar(1) + SearchBar(3) + StatusLine(1) + Inspector(4) + StatusBar(1) ≈ 10，含 margin 预留 11。
   const viewport = () => Math.max(1, dim().height - 11)
 
+  // R1：matrix 行 = 已 add 到 SSOT 的 skill（与 `asm skill list` 语义一致）；
+  // 从 state.installedSkills 取 name，回查 index.skills 拿 SkillRecord（含 status/tags 供搜索过滤）。
   const allSkills = () => {
     const idx = data.snapshot.index
-    if (!idx) return []
-    return Object.values(idx.skills).sort((a, b) => a.name.localeCompare(b.name))
+    const st = data.snapshot.state
+    if (!idx || !st) return []
+    return Object.keys(st.installedSkills)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => idx.skills[name])
+      .filter((s): s is SkillRecord => Boolean(s))
   }
+  // matrix 只显示 enabled agent 列；agent 的启停/添加集中在 AgentManagerDialog（`A` 键弹出）。
   const columns = (): AgentColumn[] => {
     const cfg = data.snapshot.config
-    return cfg ? buildAgentColumns(cfg.agents) : []
+    return cfg ? buildAgentColumns(cfg.agents, { includeDisabled: false }) : []
   }
   const filtered = () => filterSkills(allSkills(), search.query())
   const installations = () => data.snapshot.index?.installations ?? {}
@@ -75,6 +85,11 @@ export function SkillAgentView() {
   }
 
   // 行/列数变化（搜索过滤、数据刷新、终端 resize）时 clamp cursor + scroll。
+  // 行数变化（搜索过滤、数据刷新、agent 启停）后 clamp cursor.row + scrollOffset。
+  // 不能在此 effect 里调 matrix.move：realign 读 cursor 使本 effect 依赖 cursor，而 move
+  // 无条件 setCursor(新对象)，会触发本 effect 重新调度 → 无限递归（Maximum call stack）。
+  // col 的 clamp 由方向键 handler（move）一次性完成；AgentManager 关闭后列变化若致 col 越界，
+  // 用户按方向键即自愈（不在 effect 里 clamp col，避免写 cursor 引发递归）。
   createEffect(() => {
     matrix.realign(filtered().length, viewport())
   })
@@ -91,6 +106,27 @@ export function SkillAgentView() {
     onInfo: () => {
       const s = selected()
       if (s) SkillDetailDialog.show(dialog, s.name)
+    },
+    onDeleteSkill: async (skillName: string) => {
+      const ok = await ConfirmDialog.show(
+        dialog,
+        "Delete skill?",
+        `${skillName}\ndelete from SSOT + detach all agent symlinks`,
+        { confirmLabel: "delete", cancelLabel: "cancel" }
+      )
+      if (!ok) return
+      try {
+        const configStore = new ConfigStore()
+        const stateStore = new StateStore(configStore.home)
+        await skillRemove(configStore, stateStore, skillName)
+        await data.reload()
+        setMessage(`deleted skill ${skillName}`)
+      } catch (err) {
+        setMessage(`delete failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    },
+    onManageAgents: () => {
+      AgentManagerDialog.show(dialog)
     }
   })
   onMount(() => viewKey.setHandler(handleKey))
@@ -153,7 +189,9 @@ export function SkillAgentView() {
     }
     // 只清成功的，失败的保留供重试。
     for (const [skillName, agentId] of succeeded) matrix.clearIntent(skillName, agentId)
-    await data.refresh()
+    // reload（而非 refresh）：install/uninstall 改写了 state.enabledAgents，refresh 只重建 index、
+    // 仍用 apply 前的旧 state，会导致 detectInstallation 把新建的 symlink 误判为 external（[!]）。
+    await data.reload()
     const failed = matrix.pendingCount()
     setMessage(
       errors.length

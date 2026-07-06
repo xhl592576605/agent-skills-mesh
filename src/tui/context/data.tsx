@@ -58,7 +58,9 @@ export function DataProvider(props: ParentProps) {
       const config = await configStore.read()
       const state = await stateStore.read()
       let index: IndexFile | null = (await indexStore.exists()) ? await indexStore.read() : null
-      if (!index) {
+      // auto_refresh_on_start=true（默认）时启动即重建 index，避免 agent 目录被外部清理/变更后
+      // index 陈旧（否则 doctor/matrix 会报告已不存在的 external/ghost installation）。
+      if (!index || config.settings.auto_refresh_on_start) {
         index = await refreshIndex(config, state)
         await indexStore.write(index)
       }

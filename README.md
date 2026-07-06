@@ -25,6 +25,7 @@ Agent Skills Mesh（命令名 `asm`）把"技能**从哪来**、**存在哪**、
 - **交互式 TUI** — 基于 [@opentui/solid](https://opentui.com)：skill×agent 矩阵 + web 风格浮层弹窗 + fuzzy 搜索
 - **健康检查（doctor）** — external / broken-link / orphan / source-missing / conflict，一键定位与修复
 - **跨 agent 统一** — 一个技能，按需启用到任意数量的 agent
+- **agent 智能启用 + 自定义** — `init` 按安装探测自动启用；支持自定义 agent（任意 `skills_dir`），TUI/CLI 集中启停、添加、删除（内置不可删）
 
 ### 安装
 
@@ -81,6 +82,10 @@ asm tui                                   # 打开交互式 TUI
 | | `remove <name>` | 从 SSOT 删除 + 卸载所有 agent symlink |
 | | `rebind <name> --source <id>` | 把孤儿/已有技能重新关联来源 |
 | | `enable` / `disable <name> --agent <id>` | 启用/禁用：建/删 agent symlink |
+| **agent** | `list` | 列出 agent（含安装检测 / 启停状态） |
+| | `add <id> --skills-dir <path> [--name <n>]` | 添加自定义 agent（任意 skills_dir） |
+| | `remove <id>` | 移除 agent（不删其 skills_dir） |
+| | `enable` / `disable <id>` | 启用/禁用 agent（matrix 列 + symlink） |
 
 #### TUI
 
@@ -101,8 +106,11 @@ asm tui
 | `1` / `2` / `3` | 切 tab |
 | `↑` `↓` `←` `→` | 移动光标 |
 | `enter` | 切换 / 确认 |
-| `a` / `d` | 当前行全装 / 全卸 |
+| `a` | 当前行全装（所有 agent） |
+| `d` | 删除当前 skill（SSOT + symlink） |
 | `r` | 审查 pending（弹窗确认后 apply） |
+| `m` | 管理 agent（启停 / 添加，弹窗） |
+| `+` | 添加自定义 agent（id + skills_dir） |
 | `ctrl + r` | 全局刷新（重新扫描） |
 | `/` | fuzzy 搜索 |
 | `i` | 技能详情 |
@@ -157,6 +165,20 @@ enabled = true
 
 ### TODO
 
+####  bug
+
+> bug 1–5 已于 2026-07-06 修复（task `07-06-cli-tui-bugfix`），bug 6（i18n）单独排期。
+
+- [x] ~~cli 的 `skill` 语义~~ — 已修复：`skill list` 只列已 add 到 SSOT 的技能，`skill search` 列来源候选；TUI matrix 行同步为已入库
+- [x] ~~CLI 输出未对齐~~ — 已修复：固定列宽 + 表头 + CJK 双宽对齐 + 长字段截断（`src/cli/columns.ts`）
+- [x] ~~TUI add source 无法粘贴~~ — 已修复：PromptDialog 接入 opentui `usePaste`（支持 cmd+v / bracketed paste）
+- [x] ~~TUI source skill 详情缺能力~~ — 已修复：多选标记已 add（`[✓]`/`[ ]`）+ `space` 批量勾选 + `return` 批量 add + `i` 查看 SKILL.md
+- [x] ~~默认 agent 无视安装~~ — 已修复：`init` 按安装探测决定 enabled；新增 `asm agent list/add/remove/enable/disable`；TUI matrix 默认隐藏 disabled 列，`m` 打开 agent 管理弹窗（启停/添加/删除）
+- [ ] 提供中英文切换（i18n）
+
+
+
+#### 功能
 - [ ] npm 跨平台平台包发布（macOS 已就绪，Linux/Windows 待 CI matrix 实测 native 二进制）
 - [ ] 补 TUI 集成测试（discover / doctor / install-plan 端到端）
 - [ ] render-smoke 自动化（CI 下 bun vitest pool + vite-plugin-solid）

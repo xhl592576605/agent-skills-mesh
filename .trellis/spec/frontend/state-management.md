@@ -124,6 +124,14 @@ triple; prefer it over ad-hoc partial updates.
 - `clear()` — in a `batch`, invoke every item's `onClose`, then empty the stack
   (overlay-mask click).
 - `isOpen()` — `stack.length > 0`; the AppShell uses it to yield global keys.
+- `push(element, onClose?)` — append a new item on top **without** invoking
+  the lower stack's `onClose`. Use this to overlay a sub-dialog on top of a
+  live one (e.g. pressing `i` inside `MultiSelectDialog` to view a SKILL.md).
+  Closing the top via `closeTop` returns the lower dialog as top, its
+  `onClose`/Promise untouched. **Never use `replace` to show a sub-dialog over
+  a live dialog** — `replace` invokes the lower stack's `onClose` (resolving
+  its Promise with the cancel value), terminating the underlying flow and
+  losing user input.
 
 `ConfirmDialog.show()`, `SelectDialog.show()`, and `PromptDialog.show()` all
 resolve their `Promise` from both the explicit choice and the `onClose` path,

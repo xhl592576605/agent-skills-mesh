@@ -28,6 +28,10 @@ export interface SkillAgentKeyDeps {
   onReview: () => void | Promise<void>
   /** 按下 info 键（`i`）时触发，由组件注入 SkillDetailDialog（child-3）。可选：未注入时 `i` fallthrough。 */
   onInfo?: () => void | Promise<void>
+  /** 按下 `d` 删除当前 skill（从 SSOT 移除 + 断所有 agent symlink）。可选：未注入时 fallthrough。 */
+  onDeleteSkill?: (skillName: string) => void | Promise<void>
+  /** 按下 `m` 打开 agent 管理弹窗（Manage agents：启停/添加）。可选：未注入时 fallthrough。 */
+  onManageAgents?: () => void
 }
 
 /** columns accessor 的最小结构（与 projection.AgentColumn 同构，解耦避免循环类型依赖）。 */
@@ -108,9 +112,14 @@ export function handleMatrixKey(deps: SkillAgentKeyDeps, key: KeyEvent): boolean
     rowAll(deps, true)
     return true
   }
+  // `d` 删除当前 skill（从 SSOT 移除 + 断所有 symlink）；未注入 onDeleteSkill 时 fallthrough。
   if (k === "d") {
-    rowAll(deps, false)
-    return true
+    if (deps.onDeleteSkill) {
+      const skill = deps.rows()[deps.matrix.cursor().row]
+      if (skill) void deps.onDeleteSkill(skill.name)
+      return true
+    }
+    return false
   }
   // `i` 弹 skill 详情（SkillDetailDialog）；未注入 onInfo 时 fallthrough 交回 AppShell。
   if (k === "i") {
@@ -119,6 +128,12 @@ export function handleMatrixKey(deps: SkillAgentKeyDeps, key: KeyEvent): boolean
       return true
     }
     return false
+  }
+  // `m` 打开 agent 管理弹窗（Manage agents：启停/添加）；未注入时 fallthrough。
+  // 用 m 而非 A，避免与小写 a（行全装）大小写重复、视觉混淆。
+  if (k === "m" && deps.onManageAgents) {
+    deps.onManageAgents()
+    return true
   }
   // `r` 触发 review；ctrl+r（key.ctrl=true）不在此处理，fallthrough 给 AppShell 做 refresh。
   if (k === "r" && !key.ctrl) {

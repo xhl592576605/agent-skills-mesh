@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Dialog 分层(base Dialog+内容组件+show() helper)、props 约定、复用 core 类型——R3/R4 新增 MultiSelectDialog/SkillMdDialog 必须遵循"}
+{"file":".trellis/spec/frontend/solid-patterns.md","reason":"useKeyboard/useRenderer 与 owner-context pitfall——R3 粘贴接入点选择、避免 <input> focus 雷区的依据"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"snapshot store / dialog stack / 集中键路由——R1/R4/R5 的状态与键位变更依据"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"core-zero-change / 纯函数可测——R1 listInstalledSkills、R5 agent-service/config-store 新增约束"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"复用 skillAdd / opentui Markdown / renderTable 而非自造——R2/R4 复用决策依据"}

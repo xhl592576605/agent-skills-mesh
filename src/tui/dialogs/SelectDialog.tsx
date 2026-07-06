@@ -83,8 +83,10 @@ export function SelectDialog<T>(props: ParentProps<SelectDialogProps<T>>) {
       const opt = props.options[sel()]
       if (!opt || opt.disabled) return
       const value = opt.value
-      dialog.clear()
+      // onConfirm 先 resolve(value)，再 dialog.clear()（clear 的 onClose 会 resolve(undefined)，
+      // 但 Promise 已 settle 故丢弃；clear 先会导致选中值丢失）。
       props.onConfirm(value)
+      dialog.clear()
     }
     // ESC / ctrl+c 由 AppShell 关弹窗。
   })

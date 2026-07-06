@@ -20,7 +20,10 @@ import type { SourceConfig } from "../../core/models/config.js"
 import { ConfirmDialog } from "../dialogs/ConfirmDialog.js"
 import { SelectDialog } from "../dialogs/SelectDialog.js"
 import { AddSourceDialog } from "../dialogs/AddSourceDialog.js"
-import { SkillDetailDialog } from "../dialogs/SkillDetailDialog.js"
+import { MultiSelectDialog } from "../dialogs/MultiSelectDialog.js"
+import { SkillMdDialog } from "../dialogs/SkillMdDialog.js"
+import { skillAdd } from "../../core/services/skill-service.js"
+import path from "node:path"
 import {
   createSourceKeyHandler,
   type SourceKeyDeps
@@ -185,12 +188,15 @@ export function SourceView() {
     }
   }
 
-  /** 展示 source 贡献的 skill 列表（SelectDialog），选中后弹 SkillDetailDialog。 */
+  /**
+   * 展示 source 贡献的 skill 列表（R4 多选）：标记已 add、space 多选、i 看 SKILL.md、return 批量 add。
+   */
   async function doDetail(): Promise<void> {
     const src = selected()
     if (!src) return
     const index = data.snapshot.index
-    if (!index) return
+    const state = data.snapshot.state
+    if (!index || !state) return
     const skillsOfSource = Object.values(index.skills)
       .filter((s) => s.candidates.some((c) => c.sourceId === src.id))
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -198,13 +204,35 @@ export function SourceView() {
       setMessage(`${src.id} has no indexed skills (run update/refresh)`)
       return
     }
-    const name = await SelectDialog.show(
-      dialog,
-      `${src.id} skills`,
-      skillsOfSource.map((s) => ({ label: s.name, value: s.name, description: s.status }))
+    const options = skillsOfSource.map((s) => {
+      const cand = s.candidates.find((c) => c.sourceId === src.id)!
+      return {
+        label: s.name,
+        value: { name: s.name, mdPath: path.join(cand.path, "SKILL.md") } as { name: string; mdPath: string },
+        description: s.status,
+        locked: Boolean(state.installedSkills[s.name]),
+      }
+    })
+    const chosen = await MultiSelectDialog.show(dialog, `${src.id} skills`, options, {
+      onInspect: (v) => SkillMdDialog.show(dialog, v.name, v.mdPath),
+    })
+    if (!chosen || chosen.length === 0) return
+    const configStore = new ConfigStore()
+    const stateStore = new StateStore(configStore.home)
+    const added: string[] = []
+    const failed: string[] = []
+    for (const item of chosen) {
+      try {
+        await skillAdd(configStore, stateStore, index, item.name)
+        added.push(item.name)
+      } catch (err) {
+        failed.push(`${item.name} (${err instanceof Error ? err.message : String(err)})`)
+      }
+    }
+    await sync()
+    setMessage(
+      `added: ${added.join(", ") || "none"}${failed.length ? ` · failed: ${failed.join(", ")}` : ""}`
     )
-    if (name === undefined) return
-    SkillDetailDialog.show(dialog, name)
   }
 
   const statusLine = () => message() || `${sources().length} source(s)`

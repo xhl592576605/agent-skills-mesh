@@ -146,3 +146,13 @@ fetch / cache libraries.
   `ViewKeyHandler` via `useViewKey()` instead.
 - Forgetting `bunfig.toml`'s `preload = ["@opentui/solid/preload"]` — JSX stops
   being reactive.
+- Writing a signal inside a `createEffect` that the same effect reads (even
+  transitively) — triggers an infinite recompute (`Maximum call stack`). E.g.
+  an effect that calls `matrix.realign(...)` already depends on `cursor()`;
+  calling `matrix.move()` (which `setCursor`s) inside that same effect
+  re-schedules it forever. Do clamp/state writes in non-effect callbacks
+  (key/event handlers) or wrap the write in `untrack`; never inside an effect
+  that already depends on the signal.
+- `usePaste(callback)` from `@opentui/solid` is the supported hook for terminal
+  paste (cmd+v / bracketed paste); add it alongside `useKeyboard` in input
+  dialogs (`PromptDialog`). `useKeyboard` char capture alone drops pasted text.
