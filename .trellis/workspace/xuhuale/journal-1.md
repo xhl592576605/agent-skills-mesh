@@ -277,3 +277,45 @@ Implemented strict ASM private SSOT skill installs with state.json, SSOT symlink
 ### Next Steps
 
 - None - task complete
+
+---
+
+## Session: CLI/TUI bug 批量修复（07-06-cli-tui-bugfix）
+
+**Date**: 2026-07-06
+**Task**: CLI/TUI bug 批量修复（README bug 1-5）
+**Branch**: `main`
+
+### Summary
+
+修复 README TODO 的 bug 1-5 + 多轮 TUI 交互反馈修复 + agent 自定义管理能力。三层模型（source / skill-SSOT / agent）在 CLI 与 TUI 两端的列表语义、输出对齐、交互（粘贴、多选、agent 启停/添加/删除）达成一致。
+
+### Main Changes
+
+- bug1 skill list 语义：`listInstalledSkills` 纯函数；CLI list 只列已 add 到 SSOT、search 保持来源候选；TUI matrix 行同步
+- bug2 CLI 对齐：`columns.ts`（CJK 双宽 padEnd/truncate/renderTable），改写 skill list/search、source list/update
+- bug3 TUI 粘贴：PromptDialog 接入 opentui `usePaste`
+- bug4 source 多选：MultiSelectDialog（标记已 add / space 多选 / return 批量 add）+ SkillMdDialog（`dialog.push` 不打断多选）
+- bug5 agent 智能启用：init 按安装探测 enabled；`agent list/add/remove/enable/disable`；TUI `m` 键 AgentManagerDialog（内置不可删，删除只清指向 SSOT 的 symlink）
+- 实现期修复：solid effect 递归、index auto refresh、applyPending reload、dialog 提交顺序（onConfirm 先）、dialog 栈 push、AddSource 简化、d=删除 skill
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c9a4146` | fix(cli/tui): 修复 README bug 1-5 + TUI 交互与 agent 自定义管理 |
+
+### Testing
+
+- typecheck 干净；vitest 217 passed, 2 skipped（render-smoke CI 专用）
+- 新增单测：columns(8)、list-installed(3)、agent-service(12)、dialog push(2)
+- CLI 冒烟：agent list / source list / skill list / search 对齐 + R5 安装检测正确
+
+### Status
+
+**Completed & archived**（`.trellis/tasks/archive/2026-07/`）
+
+### Next Steps
+
+- bug6 i18n（中英文切换）单独排期
+- 后续小任务：AC4 paste 手动验证记录、AC5 SKILL.md 升级 Markdown 渲染（需引入 opentui syntaxStyle/tree-sitter）
