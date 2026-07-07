@@ -319,3 +319,36 @@ Implemented strict ASM private SSOT skill installs with state.json, SSOT symlink
 
 - bug6 i18n（中英文切换）单独排期
 - 后续小任务：AC4 paste 手动验证记录、AC5 SKILL.md 升级 Markdown 渲染（需引入 opentui syntaxStyle/tree-sitter）
+
+
+## Session 9: i18n 中英文双语切换 + 布局适配
+
+**Date**: 2026-07-07
+**Task**: i18n 中英文双语切换 + 布局适配
+**Branch**: `main`
+
+### Summary
+
+为 CLI/TUI 增加中英文双语：自建 i18n 模块（305 key en=zh）、core 错误码体系（33 ErrorCode，Error+属性非子类）、config.language 字段、CLI 全文本 i18n（含 --help）+ TUI I18nProvider/Shift+L 热切换、macOS locale 检测修复（读 AppleLanguages 避免 $LANG 误判）、error-handling spec 更新、README 双语。测试 398 passed。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `652bf55` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
