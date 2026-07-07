@@ -352,3 +352,36 @@ Implemented strict ASM private SSOT skill installs with state.json, SSOT symlink
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: TUI 按键交互统一（space 切换 / enter 确认）
+
+**Date**: 2026-07-07
+**Task**: TUI 按键交互统一（space 切换 / enter 确认）
+**Branch**: `main`
+
+### Summary
+
+将 TUI 统一为「空格切换、回车确认」范式：SkillAgentView 矩阵由 enter toggle 改为 space toggle，enter 改为审查确认应用，移除 r 键；AgentManager 保持即时 space 启停（低风险例外）；MultiSelectDialog 已符合未改。同步 i18n（zh-CN/en）StatusBar/帮助文案、两个 README 键位表、spec（solid-patterns）键位约定、全部相关测试（matrix 断言 + 新增 r 移除回归测试、key-routing/_bun-smoke 注释）。README TODO 的 i18n 标记完成。验证：typecheck PASS、399 tests passed。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1170dcc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
