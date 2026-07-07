@@ -360,10 +360,10 @@ describe("createSkillAgentKeyHandler — 非搜索态键路由", () => {
     expect(deps.matrix.cursor().row).toBe(0)
   })
 
-  it("enter toggle 当前格（off→pending install）", () => {
+  it("space toggle 当前格（off→pending install）", () => {
     const deps = makeHandlerDeps()
     const handler = createSkillAgentKeyHandler(deps)
-    expect(handler(key("return"))).toBe(true)
+    expect(handler(key("space", { sequence: " " }))).toBe(true)
     expect(deps.matrix.intentFor("skill-a", "claude")).toBe("install")
   })
 
@@ -384,15 +384,23 @@ describe("createSkillAgentKeyHandler — 非搜索态键路由", () => {
     expect(handler(key("d"))).toBe(false)
   })
 
-  it("r 触发 review（调用 onReview）", () => {
+  it("enter 触发 review（调用 onReview）", () => {
     const onReview = vi.fn()
     const deps = makeHandlerDeps({ onReview })
     const handler = createSkillAgentKeyHandler(deps)
-    expect(handler(key("r"))).toBe(true)
+    expect(handler(key("return"))).toBe(true)
     expect(onReview).toHaveBeenCalledOnce()
   })
 
-  it("**ctrl+r 不触发 review，fallthrough 给 AppShell refresh**（键冲突修复核心）", () => {
+  it("r 键已移除，fallthrough 给 AppShell（返回 false，不触发 review）", () => {
+    const onReview = vi.fn()
+    const deps = makeHandlerDeps({ onReview })
+    const handler = createSkillAgentKeyHandler(deps)
+    expect(handler(key("r"))).toBe(false)
+    expect(onReview).not.toHaveBeenCalled()
+  })
+
+  it("**ctrl+r fallthrough 给 AppShell refresh**（enter 做审查，ctrl+r 不冲突）", () => {
     const onReview = vi.fn()
     const deps = makeHandlerDeps({ onReview })
     const handler = createSkillAgentKeyHandler(deps)

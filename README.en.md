@@ -94,7 +94,7 @@ Three tabs (`1`/`2`/`3` to switch):
 
 | Tab | Content | Key actions |
 |---|---|---|
-| **Skill×Agent** | skill×agent matrix, cells `[on]`/`[off]`/`[!]` | `enter` toggle · `a`/`d` batch row · `r` review · `i` details |
+| **Skill×Agent** | skill×agent matrix, cells `[on]`/`[off]`/`[!]` | `space` toggle · `a`/`d` batch row · `enter` review · `i` details |
 | **Source** | source list | `a` add · `u` update · `d` remove · `e`/`x` enable/disable |
 | **Doctor** | health issues + adoptable candidates | `f` fix selected · `F` fix all |
 
@@ -102,9 +102,9 @@ Three tabs (`1`/`2`/`3` to switch):
 |---|---|
 | `1` / `2` / `3` | Switch tab |
 | `↑` `↓` `←` `→` | Move cursor |
-| `enter` | Toggle / confirm |
+| `space` | Toggle cell (install / uninstall) |
+| `enter` | Review pending (apply after dialog confirms) |
 | `a` / `d` | Install / uninstall whole row |
-| `r` | Review pending (apply after dialog confirms) |
 | `ctrl + r` | Global refresh (rescan) |
 | `/` | Fuzzy search |
 | `i` | Skill details |

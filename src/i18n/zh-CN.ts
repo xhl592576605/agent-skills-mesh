@@ -91,10 +91,10 @@ export const dict: Dict = {
 
   // === TUI StatusBar hints ===
   "hint.move": "↑↓←→ 移动",
-  "hint.toggle": "enter 切换",
+  "hint.toggle": "space 切换",
   "hint.rowOn": "a 行全装",
   "hint.delete": "d 删除",
-  "hint.review": "r 审查",
+  "hint.review": "enter 审查",
   "hint.agents": "m 智能体",
   "hint.search": "/ 搜索",
   "hint.moveV": "↑↓ 移动",
@@ -116,7 +116,7 @@ export const dict: Dict = {
   "help.globalLine": "1/2/3 切换 · ctrl+r 刷新 · L 语言 · ? 帮助 · esc/ctrl+c 退出",
   "help.skillSection": "技能×智能体",
   "help.skillLine":
-    "↑↓←→/hjkl 移动 · enter 切换 · a 行全装 · d 删除 · r 审查 · i 详情 · m 智能体 (space 切换 · a 添加) · / 搜索",
+    "↑↓←→/hjkl 移动 · space 切换 · a 行全装 · d 删除 · enter 审查 · i 详情 · m 智能体 (space 切换 · a 添加) · / 搜索",
   "help.sourceSection": "来源",
   "help.sourceLine": "a 添加 · u 更新 · d 移除 · e/x 启用/禁用 · enter 详情",
   "help.doctorSection": "健康检查",

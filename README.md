@@ -98,7 +98,7 @@ asm tui
 
 | Tab | 内容 | 主要操作 |
 |---|---|---|
-| **Skill×Agent** | skill×agent 矩阵，单元格 `[on]`/`[off]`/`[!]` | `enter` 切换 · `a`/`d` 批量行 · `r` 审查 · `i` 详情 |
+| **Skill×Agent** | skill×agent 矩阵，单元格 `[on]`/`[off]`/`[!]` | `space` 切换 · `a`/`d` 批量行 · `enter` 审查 · `i` 详情 |
 | **Source** | 来源列表 | `a` 添加 · `u` 更新 · `d` 删除 · `e`/`x` 启停 |
 | **Doctor** | 健康问题 + 可 adopt 候选 | `f` 修复选中 · `F` 修复全部 |
 
@@ -106,10 +106,10 @@ asm tui
 |---|---|
 | `1` / `2` / `3` | 切 tab |
 | `↑` `↓` `←` `→` | 移动光标 |
-| `enter` | 切换 / 确认 |
+| `space` | 切换单元格（install / uninstall） |
+| `enter` | 审查 pending（弹窗确认后 apply） |
 | `a` | 当前行全装（所有 agent） |
 | `d` | 删除当前 skill（SSOT + symlink） |
-| `r` | 审查 pending（弹窗确认后 apply） |
 | `m` | 管理 agent（启停 / 添加，弹窗） |
 | `+` | 添加自定义 agent（id + skills_dir） |
 | `ctrl + r` | 全局刷新（重新扫描） |
@@ -178,14 +178,14 @@ enabled = true
 
 ####  bug
 
-> bug 1–5 已于 2026-07-06 修复（task `07-06-cli-tui-bugfix`），bug 6（i18n）单独排期。
+> bug 1–5 已于 2026-07-06 修复（task `07-06-cli-tui-bugfix`）；bug 6（i18n）已于 2026-07-06 完成（task `07-06-i18n-zh-en-switch`）。
 
 - [x] ~~cli 的 `skill` 语义~~ — 已修复：`skill list` 只列已 add 到 SSOT 的技能，`skill search` 列来源候选；TUI matrix 行同步为已入库
 - [x] ~~CLI 输出未对齐~~ — 已修复：固定列宽 + 表头 + CJK 双宽对齐 + 长字段截断（`src/cli/columns.ts`）
 - [x] ~~TUI add source 无法粘贴~~ — 已修复：PromptDialog 接入 opentui `usePaste`（支持 cmd+v / bracketed paste）
 - [x] ~~TUI source skill 详情缺能力~~ — 已修复：多选标记已 add（`[✓]`/`[ ]`）+ `space` 批量勾选 + `return` 批量 add + `i` 查看 SKILL.md
 - [x] ~~默认 agent 无视安装~~ — 已修复：`init` 按安装探测决定 enabled；新增 `asm agent list/add/remove/enable/disable`；TUI matrix 默认隐藏 disabled 列，`m` 打开 agent 管理弹窗（启停/添加/删除）
-- [ ] 提供中英文切换（i18n）
+- [x] ~~提供中英文切换（i18n）~~ — 已完成：CLI/TUI 全覆盖中英双语，`--lang` / `ASM_LANG` / config / TUI `Shift+L` 多通道切换
 
 
 

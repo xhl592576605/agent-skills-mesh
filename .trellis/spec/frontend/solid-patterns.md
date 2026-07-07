@@ -91,7 +91,7 @@ Rules for views:
 - A view **must not** call `useKeyboard` itself. It registers a `ViewKeyHandler`
   via `useViewKey()` on mount and clears it on cleanup.
 - A handler returns `boolean` (consumed vs. fallthrough). This is how `ctrl+r`
-  stays a global refresh while `r` triggers plan review inside the skill view.
+  stays a global refresh while `enter` triggers plan review inside the skill view.
 
 ---
 

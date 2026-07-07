@@ -182,7 +182,7 @@ describe("createAppShellKeyHandler — ctrl+r vs r 区分", () => {
     expect(deps.refresh).toHaveBeenCalledOnce()
   })
 
-  it("r（无 ctrl）不触发 refresh（交 view handler 决定 review）", () => {
+  it("r（无 ctrl）不触发 refresh（r 已无 view/全局绑定，fallthrough 后无动作）", () => {
     const deps = makeDeps()
     createAppShellKeyHandler(deps)(key("r"))
     expect(deps.refresh).not.toHaveBeenCalled()

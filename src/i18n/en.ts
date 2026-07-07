@@ -92,10 +92,10 @@ export const dict = {
 
   // === TUI StatusBar hints（App.tsx TAB_HINTS；跨 tab 复用 help/refresh/tabs/moveV）===
   "hint.move": "↑↓←→ move",
-  "hint.toggle": "enter toggle",
+  "hint.toggle": "space toggle",
   "hint.rowOn": "a row-on",
   "hint.delete": "d delete",
-  "hint.review": "r review",
+  "hint.review": "enter review",
   "hint.agents": "m agents",
   "hint.search": "/ search",
   "hint.moveV": "↑↓ move",
@@ -117,7 +117,7 @@ export const dict = {
   "help.globalLine": "1/2/3 tabs · ctrl+r refresh · L lang · ? help · esc/ctrl+c exit",
   "help.skillSection": "skill×agent",
   "help.skillLine":
-    "↑↓←→/hjkl move · enter toggle · a row-on · d delete · r review · i info · m agents (space toggle · a add) · / search",
+    "↑↓←→/hjkl move · space toggle · a row-on · d delete · enter review · i info · m agents (space toggle · a add) · / search",
   "help.sourceSection": "source",
   "help.sourceLine": "a add · u update · d remove · e/x enable/disable · enter detail",
   "help.doctorSection": "doctor",

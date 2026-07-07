@@ -44,7 +44,7 @@ export interface AgentColumnLike {
  * 创建 SkillAgentView 的按键 handler。
  *
  * - 搜索激活：吞所有可打印键与 ESC/return/backspace（ctrl/meta 组合键 fallthrough，让 ctrl+r 仍 refresh）
- * - 非搜索：处理 `↑↓←→`/`hjkl`/`enter`(toggle)/`a`(行全装)/`d`(行全卸)/`r`(review)/`/`(搜索)；
+ * - 非搜索：处理 `↑↓←→`/`hjkl`/`space`(toggle)/`a`(行全装)/`d`(删除skill)/`enter`(review)/`/`(搜索)；
  *   其余键返回 false 交回 AppShell 全局键（1/2/3/ctrl+r/esc）
  */
 export function createSkillAgentKeyHandler(deps: SkillAgentKeyDeps): ViewKeyHandler {
@@ -104,7 +104,7 @@ export function handleMatrixKey(deps: SkillAgentKeyDeps, key: KeyEvent): boolean
     matrix.move(0, 1, rowCount, colCount, deps.viewport())
     return true
   }
-  if (k === "return") {
+  if (k === "space" || key.sequence === " ") {
     toggleCurrent(deps)
     return true
   }
@@ -135,8 +135,8 @@ export function handleMatrixKey(deps: SkillAgentKeyDeps, key: KeyEvent): boolean
     deps.onManageAgents()
     return true
   }
-  // `r` 触发 review；ctrl+r（key.ctrl=true）不在此处理，fallthrough 给 AppShell 做 refresh。
-  if (k === "r" && !key.ctrl) {
+  // `enter` 触发 review（确认应用 pending）。旧 `r` 键已移除，统一「space 切换 / enter 确认」范式。
+  if (k === "return") {
     void deps.onReview()
     return true
   }
