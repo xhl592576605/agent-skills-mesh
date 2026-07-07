@@ -1,5 +1,6 @@
 import type { DialogContextValue } from "../context/dialog.js"
 import { PromptDialog } from "./PromptDialog.js"
+import { t, type Locale } from "../../i18n/index.js"
 import type { AddSourceType } from "../../core/services/source-service.js"
 
 /**
@@ -23,8 +24,8 @@ export namespace AddSourceDialog {
    * target 为空视为取消（与 ESC 同语义，避免误提交空值）。
    * type / branch 留 undefined，交给 addSource 自动推断类型 + repo 默认分支。
    */
-  export async function show(dialog: DialogContextValue): Promise<AddSourceInput | undefined> {
-    const target = await PromptDialog.show(dialog, "Add source", "", "git url or local path")
+  export async function show(dialog: DialogContextValue, locale: Locale): Promise<AddSourceInput | undefined> {
+    const target = await PromptDialog.show(dialog, t("addSource.title", locale), "", t("addSource.placeholder", locale))
     if (target === undefined || target.trim() === "") return undefined
     return { target: target.trim() }
   }

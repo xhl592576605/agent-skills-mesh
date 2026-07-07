@@ -8,6 +8,7 @@ import { ensureDir, pathExists, removeRecursive } from "../../utils/fs.js";
 import { resolveConfiguredPath } from "../../utils/path.js";
 import { sha256Directory } from "../../utils/hash.js";
 import { assertPathInside, assertSafeSkillName, safeJoin } from "../../utils/safe-path.js";
+import { bizError } from "../errors.js";
 
 export interface SkillMetadataSummary {
   displayName: string;
@@ -42,7 +43,7 @@ export async function readSkillMetadata(skillDir: string, fallbackName = path.ba
 export async function copySkillDirToSsot(sourceDir: string, ssotPath: string, options: { replace?: boolean } = {}): Promise<string> {
   assertPathInside(path.dirname(ssotPath), ssotPath, "SSOT target path");
   if (!(await pathExists(path.join(sourceDir, "SKILL.md")))) {
-    throw new Error(`Source skill is missing SKILL.md: ${sourceDir}`);
+    throw bizError("SOURCE_NOT_FOUND", { sourceDir }, `Source skill is missing SKILL.md: ${sourceDir}`);
   }
 
   await ensureDir(path.dirname(ssotPath));
@@ -53,15 +54,15 @@ export async function copySkillDirToSsot(sourceDir: string, ssotPath: string, op
   try {
     await fs.cp(sourceDir, tempPath, { recursive: true, dereference: false });
     if (!(await pathExists(path.join(tempPath, "SKILL.md")))) {
-      throw new Error(`Copied skill is invalid (missing SKILL.md): ${tempPath}`);
+      throw bizError("COPIED_SKILL_INVALID", { tempPath }, `Copied skill is invalid (missing SKILL.md): ${tempPath}`);
     }
 
     const current = await safeLstat(ssotPath);
     if (current) {
       if (!current.isDirectory() || current.isSymbolicLink()) {
-        throw new Error(`SSOT target exists and is not a real directory: ${ssotPath}`);
+        throw bizError("SSOT_TARGET_NOT_DIRECTORY", { ssotPath }, `SSOT target exists and is not a real directory: ${ssotPath}`);
       }
-      if (!options.replace) throw new Error(`SSOT target already exists: ${ssotPath}`);
+      if (!options.replace) throw bizError("SSOT_TARGET_EXISTS", { ssotPath }, `SSOT target already exists: ${ssotPath}`);
       await fs.rename(ssotPath, backupPath);
       backedUp = true;
     }
@@ -162,7 +163,7 @@ export async function detachAgentSymlinks(config: AppConfig, record: InstalledSk
 export async function replaceSymlinkToSsot(targetPath: string, ssotPath: string): Promise<void> {
   const stat = await safeLstat(targetPath);
   if (stat) {
-    if (!stat.isSymbolicLink()) throw new Error(`Target is not a symlink: ${targetPath}`);
+    if (!stat.isSymbolicLink()) throw bizError("REPAIR_TARGET_NOT_SYMLINK", { path: targetPath }, `Target is not a symlink: ${targetPath}`);
     await fs.unlink(targetPath);
   }
   await ensureDir(path.dirname(targetPath));

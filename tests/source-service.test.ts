@@ -7,6 +7,7 @@ import { StateStore } from "../src/core/storage/state-store.js";
 import { addSource, listSources, removeSource, setSourceEnabled, sourceUpdate } from "../src/core/services/source-service.js";
 import { skillAdd } from "../src/core/services/skill-service.js";
 import { refreshIndex } from "../src/core/services/refresh-service.js";
+import { isBizError } from "../src/core/errors.js";
 
 async function tempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -172,5 +173,58 @@ describe("source-service enable / disable / remove (R4)", () => {
 
   test("removeSource rejects unknown id", async () => {
     await expect(removeSource(store, stateStore, "nope")).rejects.toThrow(/unknown source id/i);
+  });
+});
+
+/** 捕获 promise 的 rejection，断言是 BizError 且 code 匹配（W1 错误码断言 helper）。 */
+async function expectBizCode(p: Promise<unknown>, code: string): Promise<void> {
+  const e = await p.catch((x: unknown) => x);
+  expect(isBizError(e)).toBe(true);
+  expect((e as { code?: unknown }).code).toBe(code);
+}
+
+describe("source-service 业务错误码（W1）", () => {
+  let store: ConfigStore;
+  let stateStore: StateStore;
+  beforeEach(async () => ({ store, stateStore } = await setupHome()));
+
+  test("SOURCE_PATH_NOT_EXIST: addSource 不存在路径", async () => {
+    await expectBizCode(addSource(store, stateStore, path.join(os.tmpdir(), `asm-nope-${Date.now()}`)), "SOURCE_PATH_NOT_EXIST");
+  });
+
+  test("SOURCE_PATH_NOT_DIRECTORY: --type folder 指向文件而非目录", async () => {
+    const file = path.join(await tempDir("asm-file-"), "not-a-dir");
+    await fs.writeFile(file, "x");
+    // 显式 --type folder 跳过 inferSourceType（后者对文件路径会抛 ENOTDIR，属 C 类系统错误，
+    // 不在 W1 范围），直达 addLocalDirSource 的 isDirectory 校验 → SOURCE_PATH_NOT_DIRECTORY。
+    await expectBizCode(addSource(store, stateStore, file, { type: "folder" }), "SOURCE_PATH_NOT_DIRECTORY");
+  });
+
+  test("SOURCE_ALREADY_REGISTERED: 重复 path", async () => {
+    const dir = await tempDir("asm-dup-code-");
+    await writeSkill(path.join(dir, "foo"), "foo");
+    await addSource(store, stateStore, dir);
+    await expectBizCode(addSource(store, stateStore, dir), "SOURCE_ALREADY_REGISTERED");
+  });
+
+  test("SOURCE_NOT_SKILL_DIR: --type skill 到无 SKILL.md 目录", async () => {
+    const dir = await tempDir("asm-noskill-");
+    await fs.mkdir(dir, { recursive: true });
+    await expectBizCode(addSource(store, stateStore, dir, { type: "skill" }), "SOURCE_NOT_SKILL_DIR");
+  });
+
+  test("SOURCE_ID_EXISTS: 重复自定义 id", async () => {
+    const dirA = await tempDir("asm-idcode-a-");
+    const dirB = await tempDir("asm-idcode-b-");
+    await writeSkill(path.join(dirA, "a"), "a");
+    await writeSkill(path.join(dirB, "b"), "b");
+    await addSource(store, stateStore, dirA, { id: "dup-code" });
+    await expectBizCode(addSource(store, stateStore, dirB, { id: "dup-code" }), "SOURCE_ID_EXISTS");
+  });
+
+  test("SOURCE_ID_UNKNOWN: setSourceEnabled / removeSource / sourceUpdate 未知 id", async () => {
+    await expectBizCode(setSourceEnabled(store, "nope", true), "SOURCE_ID_UNKNOWN");
+    await expectBizCode(removeSource(store, stateStore, "nope"), "SOURCE_ID_UNKNOWN");
+    await expectBizCode(sourceUpdate(store, stateStore, "nope"), "SOURCE_ID_UNKNOWN");
   });
 });

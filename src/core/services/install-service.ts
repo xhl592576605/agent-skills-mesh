@@ -22,6 +22,7 @@ import {
   samePath
 } from "./ssot-service.js";
 import { assertPathInside, safeJoin } from "../../utils/safe-path.js";
+import { bizError } from "../errors.js";
 
 export async function detectInstallations(config: AppConfig, skills: Record<string, SkillRecord>, state: StateFile = createEmptyState()): Promise<Record<string, InstallationRecord>> {
   const records: Record<string, InstallationRecord> = {};
@@ -70,12 +71,12 @@ export async function detectInstallation(skill: SkillRecord, agentId: string, sk
 
 export async function buildInstallPlan(config: AppConfig, index: IndexFile, skillName: string, agentId: string, state: StateFile = createEmptyState()): Promise<InstallPlan> {
   const skill = index.skills[skillName];
-  if (!skill) throw new Error(`Skill not found: ${skillName}`);
+  if (!skill) throw bizError("SKILL_NOT_FOUND", { name: skillName }, `Skill not found: ${skillName}`);
   const existing = state.installedSkills[skillName];
   if (existing) assertPathInside(getSsotRoot(config), existing.ssotPath, "installed SSOT path");
   const candidate = selectCandidate(skill) ?? skill.candidates[0];
   const agent = config.agents[agentId];
-  if (!agent) throw new Error(`Agent not found: ${agentId}`);
+  if (!agent) throw bizError("AGENT_NOT_FOUND", { id: agentId }, `Agent not found: ${agentId}`);
   const warnings: string[] = [];
   const actions: InstallAction[] = [];
   const ssotPath = existing?.ssotPath ?? getSsotSkillPath(config, skill.name);
@@ -91,7 +92,7 @@ export async function buildInstallPlan(config: AppConfig, index: IndexFile, skil
 
   let record = existing;
   if (!record) {
-    if (!candidate) throw new Error(`No installable candidate for skill: ${skillName}`);
+    if (!candidate) throw bizError("NO_INSTALLABLE_CANDIDATE", { name: skillName }, `No installable candidate for skill: ${skillName}`);
     if (!(await pathExists(candidate.path))) {
       actions.push({ type: "conflict", agentId, targetPath: candidate.path, reason: "source skill is missing" });
       return makePlan(skill, candidate, ssotPath, actions, warnings);
@@ -135,7 +136,7 @@ export async function buildInstallPlan(config: AppConfig, index: IndexFile, skil
 }
 
 export async function applyInstallPlan(plan: InstallPlan, stateStore?: StateStore): Promise<void> {
-  if (plan.hasConflict) throw new Error("Install plan has conflicts");
+  if (plan.hasConflict) throw bizError("INSTALL_PLAN_CONFLICT", {}, "Install plan has conflicts");
   for (const action of plan.actions) {
     if (action.type === "copy-to-ssot") await copySkillDirToSsot(action.sourcePath, action.targetPath, { replace: action.replace });
     else if (action.type === "create-symlink") {
@@ -159,7 +160,7 @@ export async function applyInstallPlan(plan: InstallPlan, stateStore?: StateStor
 
 export async function buildUninstallPlan(config: AppConfig, skillName: string, agentId: string, state: StateFile = createEmptyState()): Promise<UninstallPlan> {
   const agent = config.agents[agentId];
-  if (!agent) throw new Error(`Agent not found: ${agentId}`);
+  if (!agent) throw bizError("AGENT_NOT_FOUND", { id: agentId }, `Agent not found: ${agentId}`);
   const targetPath = safeJoin(resolveConfiguredPath(agent.skills_dir), skillName, "agent skill path");
   const lstat = await safeLstat(targetPath);
   const actions: InstallAction[] = [];
@@ -177,7 +178,7 @@ export async function buildUninstallPlan(config: AppConfig, skillName: string, a
 }
 
 export async function applyUninstallPlan(plan: UninstallPlan, stateStore?: StateStore): Promise<void> {
-  if (plan.hasConflict) throw new Error("Uninstall plan has conflicts");
+  if (plan.hasConflict) throw bizError("UNINSTALL_PLAN_CONFLICT", {}, "Uninstall plan has conflicts");
   for (const action of plan.actions) {
     if (action.type === "remove-symlink") await fs.unlink(action.targetPath);
     else if (action.type === "update-state" && stateStore) {
@@ -193,9 +194,9 @@ export async function applyUninstallPlan(plan: UninstallPlan, stateStore?: State
  */
 export async function buildRepairPlan(config: AppConfig, index: IndexFile, skillName: string, agentId: string, state: StateFile = createEmptyState()): Promise<RepairPlan> {
   const skill = index.skills[skillName];
-  if (!skill) throw new Error(`Skill not found: ${skillName}`);
+  if (!skill) throw bizError("SKILL_NOT_FOUND", { name: skillName }, `Skill not found: ${skillName}`);
   const agent = config.agents[agentId];
-  if (!agent) throw new Error(`Agent not found: ${agentId}`);
+  if (!agent) throw bizError("AGENT_NOT_FOUND", { id: agentId }, `Agent not found: ${agentId}`);
 
   const targetPath = safeJoin(resolveConfiguredPath(agent.skills_dir), skill.name, "agent skill path");
   const candidate = selectCandidate(skill);
@@ -216,10 +217,10 @@ export async function buildRepairPlan(config: AppConfig, index: IndexFile, skill
 }
 
 export async function applyRepairPlan(plan: RepairPlan): Promise<void> {
-  if (plan.hasConflict) throw new Error("Repair plan has conflicts");
+  if (plan.hasConflict) throw bizError("REPAIR_PLAN_CONFLICT", {}, "Repair plan has conflicts");
   const lstat = await safeLstat(plan.targetPath);
-  if (!lstat) throw new Error(`Repair target does not exist: ${plan.targetPath}`);
-  if (!lstat.isSymbolicLink()) throw new Error(`Repair target is not a symlink (refusing to delete real directory or file): ${plan.targetPath}`);
+  if (!lstat) throw bizError("REPAIR_TARGET_MISSING", { path: plan.targetPath }, `Repair target does not exist: ${plan.targetPath}`);
+  if (!lstat.isSymbolicLink()) throw bizError("REPAIR_TARGET_NOT_SYMLINK", { path: plan.targetPath }, `Repair target is not a symlink (refusing to delete real directory or file): ${plan.targetPath}`);
   await replaceSymlinkToSsot(plan.targetPath, plan.newTarget);
 }
 

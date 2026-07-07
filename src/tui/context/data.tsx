@@ -4,6 +4,7 @@ import { ConfigStore } from "../../core/storage/config-store.js"
 import { IndexStore } from "../../core/storage/index-store.js"
 import { StateStore } from "../../core/storage/state-store.js"
 import { refreshIndex } from "../../core/services/refresh-service.js"
+import { bizError } from "../../core/errors.js"
 import type { AppConfig } from "../../core/models/config.js"
 import type { IndexFile } from "../../core/models/index.js"
 import type { StateFile } from "../../core/models/state.js"
@@ -53,7 +54,7 @@ export function DataProvider(props: ParentProps) {
     setSnapshot("error", null)
     try {
       if (!(await configStore.exists())) {
-        throw new Error("config.toml not found. Run `asm init` first.")
+        throw bizError("CONFIG_NOT_FOUND")
       }
       const config = await configStore.read()
       const state = await stateStore.read()

@@ -1,6 +1,7 @@
 import { useTerminalDimensions } from "@opentui/solid"
 import { Show, createEffect, createSignal, onCleanup, onMount } from "solid-js"
 import { useTheme } from "../context/theme.js"
+import { useI18n } from "../context/i18n.js"
 import { useData } from "../context/data.js"
 import { useDialog } from "../context/dialog.js"
 import { useViewKey } from "../context/view-key.js"
@@ -14,6 +15,7 @@ import {
 } from "../../core/services/install-service.js"
 import { ConfirmDialog } from "../dialogs/ConfirmDialog.js"
 import { skillRemove } from "../../core/services/skill-service.js"
+import { errorMessage } from "../../i18n/index.js"
 import { SkillDetailDialog } from "../dialogs/SkillDetailDialog.js"
 import { AgentManagerDialog } from "../dialogs/AgentManagerDialog.js"
 import { createMatrixState, type MatrixState } from "../state/matrix.js"
@@ -49,6 +51,7 @@ export { createSkillAgentKeyHandler, type SkillAgentKeyDeps } from "../state/ski
  */
 export function SkillAgentView() {
   const theme = useTheme()
+  const i18n = useI18n()
   const data = useData()
   const dialog = useDialog()
   const viewKey = useViewKey()
@@ -56,6 +59,7 @@ export function SkillAgentView() {
   const matrix: MatrixState = createMatrixState()
   const search = createSearchState()
   const [message, setMessage] = createSignal("")
+  const [hasApplyError, setHasApplyError] = createSignal(false)
 
   // 预留行：TabBar(1) + SearchBar(3) + StatusLine(1) + Inspector(4) + StatusBar(1) ≈ 10，含 margin 预留 11。
   const viewport = () => Math.max(1, dim().height - 11)
@@ -110,9 +114,9 @@ export function SkillAgentView() {
     onDeleteSkill: async (skillName: string) => {
       const ok = await ConfirmDialog.show(
         dialog,
-        "Delete skill?",
-        `${skillName}\ndelete from SSOT + detach all agent symlinks`,
-        { confirmLabel: "delete", cancelLabel: "cancel" }
+        i18n.t("skillView.deleteTitle"),
+        i18n.t("skillView.deleteMsg", { name: skillName }),
+        { confirmLabel: i18n.t("btn.delete"), cancelLabel: i18n.t("btn.cancel") }
       )
       if (!ok) return
       try {
@@ -120,9 +124,9 @@ export function SkillAgentView() {
         const stateStore = new StateStore(configStore.home)
         await skillRemove(configStore, stateStore, skillName)
         await data.reload()
-        setMessage(`deleted skill ${skillName}`)
+        setMessage(i18n.t("skillView.deleted", { name: skillName }))
       } catch (err) {
-        setMessage(`delete failed: ${err instanceof Error ? err.message : String(err)}`)
+        setMessage(i18n.t("skillView.deleteFail", { message: errorMessage(err, i18n.locale()) }))
       }
     },
     onManageAgents: () => {
@@ -142,19 +146,19 @@ export function SkillAgentView() {
         else uninstalls++
       }
     }
-    const lines = [`${installs} install / ${uninstalls} uninstall`]
+    const lines = [i18n.t("skillView.summaryTotal", { installs, uninstalls })]
     for (const [skillName, row] of Object.entries(map)) {
       const parts = Object.entries(row).map(([a, i]) => `${i === "install" ? "+" : "-"}${a}`)
-      lines.push(`${skillName}: ${parts.join(" ")}`)
+      lines.push(i18n.t("skillView.summaryRow", { skill: skillName, parts: parts.join(" ") }))
     }
     return lines.join("\n")
   }
 
   async function reviewAndApply(): Promise<void> {
     if (!matrix.hasPending()) return
-    const ok = await ConfirmDialog.show(dialog, "Apply pending changes?", buildSummary(), {
-      confirmLabel: "apply",
-      cancelLabel: "cancel"
+    const ok = await ConfirmDialog.show(dialog, i18n.t("skillView.applyTitle"), buildSummary(), {
+      confirmLabel: i18n.t("btn.apply"),
+      cancelLabel: i18n.t("btn.cancel")
     })
     if (!ok) return
     await applyPending()
@@ -183,7 +187,7 @@ export function SkillAgentView() {
           currentState = await stateStore.read()
           succeeded.push([skillName, agentId])
         } catch (err) {
-          errors.push(`${skillName}/${agentId}: ${err instanceof Error ? err.message : String(err)}`)
+          errors.push(`${skillName}/${agentId}: ${errorMessage(err, i18n.locale())}`)
         }
       }
     }
@@ -193,10 +197,11 @@ export function SkillAgentView() {
     // 仍用 apply 前的旧 state，会导致 detectInstallation 把新建的 symlink 误判为 external（[!]）。
     await data.reload()
     const failed = matrix.pendingCount()
+    setHasApplyError(errors.length > 0)
     setMessage(
       errors.length
-        ? `applied ${succeeded.length}, ${failed} failed (kept for retry)`
-        : `applied ${succeeded.length} ok`
+        ? i18n.t("skillView.appliedPartial", { ok: succeeded.length, failed })
+        : i18n.t("skillView.appliedOk", { count: succeeded.length })
     )
   }
 
@@ -229,20 +234,20 @@ export function SkillAgentView() {
   const statusLine = () =>
     message() ||
     (matrix.hasPending()
-      ? `press r to review ${matrix.pendingCount()} pending`
-      : `${filtered().length} skill(s)`)
+      ? i18n.t("skillView.pressReview", { count: matrix.pendingCount() })
+      : i18n.t("skillView.skillCount", { count: filtered().length }))
 
   return (
     <box flexDirection="column" flexGrow={1} width={dim().width}>
-      <SearchBar query={search.query()} active={search.active()} theme={theme} />
+      <SearchBar query={search.query()} active={search.active()} theme={theme} t={i18n.t} />
       <box flexGrow={1} flexDirection="column">
         <Show
           when={!data.snapshot.loading}
-          fallback={<text fg={theme.textMuted}>Loading...</text>}
+          fallback={<text fg={theme.textMuted}>{i18n.t("common.loading")}</text>}
         >
           <Show
             when={!data.snapshot.error}
-            fallback={<text fg={theme.danger}>Error: {data.snapshot.error?.message}</text>}
+            fallback={<text fg={theme.danger}>{i18n.t("common.errorLine", { message: data.snapshot.error?.message ?? "" })}</text>}
           >
             <Matrix
               rows={filtered()}
@@ -250,6 +255,7 @@ export function SkillAgentView() {
               installations={installations()}
               matrix={matrix}
               theme={theme}
+              t={i18n.t}
               viewport={viewport()}
             />
           </Show>
@@ -265,11 +271,12 @@ export function SkillAgentView() {
         installations={installations()}
         matrix={matrix}
         theme={theme}
+        t={i18n.t}
       />
       {/* 错误明细（apply 出错时滚动展示） */}
-      <Show when={message().includes("failed")}>
+      <Show when={hasApplyError()}>
         <box paddingLeft={1}>
-          <text fg={theme.danger}>some changes had conflicts — see `asm doctor` or retry</text>
+          <text fg={theme.danger}>{i18n.t("skillView.someConflicts")}</text>
         </box>
       </Show>
     </box>

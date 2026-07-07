@@ -21,6 +21,7 @@ import {
   readSkillMetadata
 } from "./ssot-service.js";
 import { resolveSourceSkillDir } from "./source-service.js";
+import { bizError } from "../errors.js";
 
 /**
  * 按 keyword 子串过滤 index 中的 skills（匹配 name/displayName/description/tags，大小写不敏感）。
@@ -79,16 +80,16 @@ export function listInstalledSkills(state: StateFile, index: IndexFile): Install
 export async function skillAdd(configStore: ConfigStore, stateStore: StateStore, index: IndexFile, name: string, options: { source?: string } = {}): Promise<InstalledSkillRecord> {
   const config = await configStore.read();
   const state = await stateStore.read();
-  if (state.installedSkills[name]) throw new Error(`Skill already installed: ${name}`);
+  if (state.installedSkills[name]) throw bizError("SKILL_ALREADY_INSTALLED", { name }, `Skill already installed: ${name}`);
   const skill = index.skills[name];
-  if (!skill) throw new Error(`Skill not found in index: ${name} (run \`asm refresh\` first)`);
+  if (!skill) throw bizError("SKILL_NOT_IN_INDEX", { name }, `Skill not found in index: ${name} (run \`asm refresh\` first)`);
 
   const liveSourceIds = new Set(config.sources.map((source) => source.id));
-  if (options.source && !liveSourceIds.has(options.source)) throw new Error(`Unknown source id: ${options.source}`);
+  if (options.source && !liveSourceIds.has(options.source)) throw bizError("SOURCE_ID_UNKNOWN", { id: options.source }, `Unknown source id: ${options.source}`);
   let candidates = skill.candidates.filter((candidate) => candidate.origin === "configured-source" && liveSourceIds.has(candidate.sourceId));
   if (options.source) candidates = candidates.filter((candidate) => candidate.sourceId === options.source);
-  if (candidates.length === 0) throw new Error(`No candidate for skill ${name}${options.source ? ` from source ${options.source}` : ""}`);
-  if (candidates.length > 1) throw new Error(`Multiple candidates for ${name}: ${candidates.map((candidate) => candidate.sourceId).join(", ")}; specify --source <id>`);
+  if (candidates.length === 0) throw bizError("SKILL_NO_CANDIDATE", { name }, `No candidate for skill ${name}${options.source ? ` from source ${options.source}` : ""}`);
+  if (candidates.length > 1) throw bizError("SKILL_MULTIPLE_CANDIDATES", { name, sources: candidates.map((candidate) => candidate.sourceId).join(", ") }, `Multiple candidates for ${name}: ${candidates.map((candidate) => candidate.sourceId).join(", ")}; specify --source <id>`);
 
   const candidate = candidates[0];
   assertSafeSkillName(name);
@@ -109,14 +110,14 @@ export async function skillRebind(configStore: ConfigStore, stateStore: StateSto
   const config = await configStore.read();
   const state = await stateStore.read();
   const record = state.installedSkills[name];
-  if (!record) throw new Error(`Skill not installed: ${name}`);
+  if (!record) throw bizError("SKILL_NOT_INSTALLED", { name }, `Skill not installed: ${name}`);
   const source = config.sources.find((entry) => entry.id === sourceId);
-  if (!source) throw new Error(`Unknown source id: ${sourceId}`);
+  if (!source) throw bizError("SOURCE_ID_UNKNOWN", { id: sourceId }, `Unknown source id: ${sourceId}`);
   const skill = index.skills[name];
-  if (!skill) throw new Error(`Skill not found in index: ${name} (run \`asm refresh\` first)`);
+  if (!skill) throw bizError("SKILL_NOT_IN_INDEX", { name }, `Skill not found in index: ${name} (run \`asm refresh\` first)`);
   const candidate = skill.candidates.find((entry) => entry.sourceId === sourceId);
-  if (!candidate) throw new Error(`Source ${sourceId} does not provide skill ${name}`);
-  if (candidate.origin !== "configured-source") throw new Error(`Source ${sourceId} candidate is not a configured-source`);
+  if (!candidate) throw bizError("SOURCE_NOT_PROVIDE_SKILL", { sourceId, name }, `Source ${sourceId} does not provide skill ${name}`);
+  if (candidate.origin !== "configured-source") throw bizError("CANDIDATE_NOT_CONFIGURED_SOURCE", { sourceId }, `Source ${sourceId} candidate is not a configured-source`);
   // 校验 candidate.path 在当前 source.path 内，防 index 陈旧/source id 复用导致 relativePath 逃逸。
   assertPathInside(resolveConfiguredPath(source.path), resolveConfiguredPath(candidate.path), "rebind candidate path");
 
@@ -133,7 +134,7 @@ export async function skillRemove(configStore: ConfigStore, stateStore: StateSto
   const config = await configStore.read();
   const state = await stateStore.read();
   const record = state.installedSkills[name];
-  if (!record) throw new Error(`Skill not installed: ${name}`);
+  if (!record) throw bizError("SKILL_NOT_INSTALLED", { name }, `Skill not installed: ${name}`);
   assertPathInside(getSsotRoot(config), record.ssotPath, "installed SSOT path");
 
   await detachAgentSymlinks(config, record);

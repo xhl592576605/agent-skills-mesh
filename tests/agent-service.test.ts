@@ -12,6 +12,7 @@ import {
 import { StateStore } from "../src/core/storage/state-store.js";
 import { addAgent, listAgents, removeAgent, setAgentEnabled } from "../src/core/services/agent-service.js";
 import { buildAgentColumns } from "../src/tui/state/projection.js";
+import { isBizError } from "../src/core/errors.js";
 
 async function tempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -139,5 +140,46 @@ describe("agent add/remove (R5+)", () => {
     expect(config.agents.tmp).toBeUndefined();
     // 未知 id
     await expect(removeAgent(store, stateStore, "tmp")).rejects.toThrow(/Unknown agent/);
+  });
+});
+
+/** 捕获 promise 的 rejection，断言是 BizError 且 code 匹配（W1 错误码断言 helper）。 */
+async function expectBizCode(p: Promise<unknown>, code: string): Promise<void> {
+  const e = await p.catch((x: unknown) => x);
+  expect(isBizError(e)).toBe(true);
+  expect((e as { code?: unknown }).code).toBe(code);
+}
+
+describe("agent-service 业务错误码（W1）", () => {
+  test("AGENT_NOT_FOUND: setAgentEnabled / removeAgent 未知 id", async () => {
+    const home = await tempDir("asm-ag-nf-");
+    const store = new ConfigStore(home);
+    const stateStore = new StateStore(store.home);
+    await store.init();
+    await expectBizCode(setAgentEnabled(store, "nope", true), "AGENT_NOT_FOUND");
+    await expectBizCode(removeAgent(store, stateStore, "nope"), "AGENT_NOT_FOUND");
+  });
+
+  test("AGENT_ID_INVALID: addAgent 非法 id", async () => {
+    const home = await tempDir("asm-ag-invalid-");
+    const store = new ConfigStore(home);
+    await store.init();
+    await expectBizCode(addAgent(store, "Bad ID", { skillsDir: "/x" }), "AGENT_ID_INVALID");
+  });
+
+  test("AGENT_ALREADY_EXISTS: addAgent 重复 id", async () => {
+    const home = await tempDir("asm-ag-dup-");
+    const store = new ConfigStore(home);
+    await store.init();
+    await addAgent(store, "dup", { skillsDir: "/x" });
+    await expectBizCode(addAgent(store, "dup", { skillsDir: "/y" }), "AGENT_ALREADY_EXISTS");
+  });
+
+  test("AGENT_BUILTIN_NO_REMOVE: removeAgent 内置 agent", async () => {
+    const home = await tempDir("asm-ag-builtin-");
+    const store = new ConfigStore(home);
+    const stateStore = new StateStore(store.home);
+    await store.init();
+    await expectBizCode(removeAgent(store, stateStore, "claude"), "AGENT_BUILTIN_NO_REMOVE");
   });
 });

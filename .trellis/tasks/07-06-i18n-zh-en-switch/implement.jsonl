@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "BizError 错误码体系需遵循并演进此 spec：禁止 Error 子类，i18n 错误码属'programmatic branching'例外，用 Error+code 属性；Phase F 需更新此 spec 文档化约定"}
+{"file": ".trellis/spec/frontend/solid-patterns.md", "reason": "I18nProvider/useI18n 须照 theme.tsx 的 Context 模式；Owner Context 规则（组件体捕获，不在 useKeyboard/async 回调调 useI18n）；键位检测 key.name 恒小写、大写看 key.shift（shift+l 热切换键）"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "lang 用 createSignal 做热切换；t() 须在 JSX 以函数调用形式读取保持响应式；集中键位路由（toggleLang 注入 app-keys）"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "文本替换仅改字符串来源走 t()，不改 box/text 组件结构；dialog/StatusBar 契约不变"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "TKey 从 en.ts 反推联合类型保证字典完整性；复用 core 模型类型（Locale/Params）"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "src/i18n/ 新模块放置；APFS 大小写不敏感约束（i18n.tsx 命名避 index.ts/index.tsx 冲突）"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "src/core/errors.ts 放置与 kebab-case 命名；plan/apply 分离原则（错误码不破坏现有 apply 流程）"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "t() 输出仍走 console.log/error，不引入 logger；CLI 输出约定保持人类可读"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "i18n 跨 core(错误码)/cli(tui(响应式) 三层数据流；config.language 字段经 storage→cli/tui 传递；避免层间重复读取同一 payload"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "t()/formatError()/resolveLanguage() 为共用 helper，新增前先搜现有 utils；避免 cli 与 tui 各写一套错误格式化"}

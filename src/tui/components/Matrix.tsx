@@ -9,6 +9,7 @@ import {
   cellInfo,
   installationKey
 } from "../state/projection.js"
+import { type TranslateFn } from "../context/i18n.js"
 
 /**
  * skill×agent 表格（design §6）。
@@ -22,6 +23,8 @@ export interface MatrixProps {
   installations: Record<string, InstallationRecord>
   matrix: MatrixState
   theme: Theme
+  /** 翻译函数（与 theme 同为渲染环境，由父 useI18n 注入）。 */
+  t: TranslateFn
   /** Name 列宽（字符）。 */
   nameWidth?: number
   /** 每个 agent 列宽（字符）。 */
@@ -46,7 +49,7 @@ export function Matrix(props: MatrixProps) {
       {/* 表头 */}
       <box flexDirection="row" backgroundColor={theme.backgroundPanel}>
         <box width={nameWidth()} paddingLeft={1}>
-          <text fg={theme.textMuted}>Name</text>
+          <text fg={theme.textMuted}>{props.t("table.name")}</text>
         </box>
         <For each={props.columns}>
           {(col) => (

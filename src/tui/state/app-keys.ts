@@ -33,6 +33,8 @@ export interface AppShellKeyDeps {
   showHelp: () => void
   /** 退出 TUI（ESC/ctrl+c 在无弹窗时）。 */
   exit: () => void
+  /** 语言热切换（shift+L）：zh↔en 互切并写回 config。 */
+  toggleLang: () => void
 }
 
 /**
@@ -46,6 +48,13 @@ export function createAppShellKeyHandler(deps: AppShellKeyDeps): (key: KeyEvent)
     // 1. 弹窗优先：吞所有键，仅 ESC/ctrl+c 关栈顶
     if (deps.isOpen()) {
       if (key.name === "escape" || (key.ctrl && key.name === "c")) deps.closeTop()
+      return
+    }
+    // 1.5 语言热切换（shift+L，全局优先）：key.name 恒小写，大写看 key.shift（solid-patterns）。
+    //     前置于 view handler，确保不被搜索态吞字符、不被 matrix hjkl 的 l 右移拦截
+    //     （普通 l 无 shift 仍落 view handler 正常右移）。
+    if (key.name === "l" && key.shift) {
+      deps.toggleLang()
       return
     }
     // 2. view handler 优先消费（返回 true=吞，不再派发全局键）

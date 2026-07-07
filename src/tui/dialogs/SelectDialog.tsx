@@ -2,6 +2,7 @@ import { useKeyboard } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { For, createEffect, createSignal, type ParentProps } from "solid-js"
 import { useTheme } from "../context/theme.js"
+import { useI18n } from "../context/i18n.js"
 import { useDialog, type DialogContextValue } from "../context/dialog.js"
 
 /**
@@ -35,6 +36,7 @@ export interface SelectDialogProps<T> {
 
 export function SelectDialog<T>(props: ParentProps<SelectDialogProps<T>>) {
   const theme = useTheme()
+  const i18n = useI18n()
   const dialog = useDialog()
   const [sel, setSel] = createSignal(0)
 
@@ -116,7 +118,7 @@ export function SelectDialog<T>(props: ParentProps<SelectDialogProps<T>>) {
           )}
         </For>
       </box>
-      <text fg={theme.textMuted}>↑↓ move · return select · esc cancel</text>
+      <text fg={theme.textMuted}>{i18n.t("select.footer")}</text>
     </box>
   )
 }

@@ -3,6 +3,7 @@ import { TextAttributes } from "@opentui/core"
 import { Show, createMemo, createSignal } from "solid-js"
 import { ThemeProvider, useTheme } from "./context/theme.js"
 import { DataProvider, useData } from "./context/data.js"
+import { I18nProvider, useI18n } from "./context/i18n.js"
 import { DialogProvider, useDialog } from "./context/dialog.js"
 import { ViewKeyProvider, type ViewKeyContextValue, type ViewKeyHandler } from "./context/view-key.js"
 import { StatusBar } from "./components/StatusBar.js"
@@ -10,70 +11,35 @@ import { SkillAgentView } from "./views/SkillAgentView.js"
 import { SourceView } from "./views/SourceView.js"
 import { DoctorView } from "./views/DoctorView.js"
 import { createAppShellKeyHandler } from "./state/app-keys.js"
+import type { Locale } from "../i18n/index.js"
 
 type Tab = "skill" | "source" | "doctor"
-
-/** 顶部 TabBar 三个 tab（design §13：数据驱动，新增 tab 不改 App 结构）。 */
-const TABS: { key: Tab; label: string }[] = [
-  { key: "skill", label: "1 Skill×Agent" },
-  { key: "source", label: "2 Source" },
-  { key: "doctor", label: "3 Doctor" }
-]
-
-/** 各 tab 的快捷键提示（注入 StatusBar，design §13 契约）。child-3 扩展 source/doctor。 */
-const TAB_HINTS: Record<Tab, readonly string[]> = {
-  // skill×agent matrix：a=行全装、d=删除 skill、A=打开 agent 管理弹窗（启停/添加）。
-  skill: [
-    "↑↓←→ move",
-    "enter toggle",
-    "a row-on",
-    "d delete",
-    "r review",
-    "m agents",
-    "/ search",
-    "? help"
-  ],
-  source: [
-    "↑↓ move",
-    "a add",
-    "u update",
-    "d remove",
-    "e/x en/dis",
-    "enter detail",
-    "ctrl+r refresh",
-    "? help",
-    "1/2/3 tabs"
-  ],
-  doctor: [
-    "↑↓ move",
-    "f fix",
-    "F fix-all",
-    "ctrl+r refresh",
-    "? help",
-    "1/2/3 tabs"
-  ]
-}
 
 /**
  * App —— Provider 装配 + 布局入口。
  *
- * 结构：ThemeProvider → DataProvider → DialogProvider → AppShell。
- * AppShell 负责 TabBar / 内容视图 / StatusBar + **集中键盘路由**（design §6）。
+ * 结构：ThemeProvider → I18nProvider → DataProvider → DialogProvider → AppShell。
+ * I18nProvider 位于 DialogProvider 之外，故弹窗内的 `useI18n()` 也能解析（弹窗 element
+ * 在 DialogProvider owner 内创建，被 I18nContext 覆盖）。`lang` 由 `run()` 经
+ * `resolveLanguage()` 解析后注入，TUI 内 `shift+L` 热切换只改 signal + 写回 config。
  */
-export function App() {
+export function App(props: { lang: Locale }) {
   return (
     <ThemeProvider>
-      <DataProvider>
-        <DialogProvider>
-          <AppShell />
-        </DialogProvider>
-      </DataProvider>
+      <I18nProvider initial={props.lang}>
+        <DataProvider>
+          <DialogProvider>
+            <AppShell />
+          </DialogProvider>
+        </DataProvider>
+      </I18nProvider>
     </ThemeProvider>
   )
 }
 
 function AppShell() {
   const theme = useTheme()
+  const i18n = useI18n()
   const dialog = useDialog()
   const data = useData()
   const renderer = useRenderer()
@@ -93,14 +59,58 @@ function AppShell() {
   }
   const viewKeyCtx: ViewKeyContextValue = { setHandler }
 
+  /** Tab 标签（依赖 t()，语言切换后响应式重算）。 */
+  const tabs = createMemo(() => [
+    { key: "skill" as const, label: i18n.t("tab.skill") },
+    { key: "source" as const, label: i18n.t("tab.source") },
+    { key: "doctor" as const, label: i18n.t("tab.doctor") }
+  ])
+
+  /** 当前 tab 的快捷键提示（注入 StatusBar）。依赖 t()，语言切换后响应式。 */
+  const tabHints = createMemo((): readonly string[] => {
+    if (tab() === "skill") {
+      return [
+        i18n.t("hint.move"),
+        i18n.t("hint.toggle"),
+        i18n.t("hint.rowOn"),
+        i18n.t("hint.delete"),
+        i18n.t("hint.review"),
+        i18n.t("hint.agents"),
+        i18n.t("hint.search"),
+        i18n.t("hint.help")
+      ]
+    }
+    if (tab() === "source") {
+      return [
+        i18n.t("hint.moveV"),
+        i18n.t("hint.add"),
+        i18n.t("hint.update"),
+        i18n.t("hint.remove"),
+        i18n.t("hint.enDis"),
+        i18n.t("hint.detail"),
+        i18n.t("hint.refresh"),
+        i18n.t("hint.help"),
+        i18n.t("hint.tabs")
+      ]
+    }
+    return [
+      i18n.t("hint.moveV"),
+      i18n.t("hint.fix"),
+      i18n.t("hint.fixAll"),
+      i18n.t("hint.refresh"),
+      i18n.t("hint.help"),
+      i18n.t("hint.tabs")
+    ]
+  })
+
   /**
    * 单一 useKeyboard 集中路由（design §6）。opentui useKeyboard 无 stopPropagation，
    * 多订阅会双触发，故 AppShell 唯一订阅，把派发逻辑交给纯函数 `createAppShellKeyHandler`
    * （见 state/app-keys.ts，便于 tests/tui/key-routing.test.ts 纯函数测试）。
    *
-   * 派发优先级：①弹窗打开→ESC/ctrl+c 关栈顶，其余键交弹窗内部组件；②view handler 优先
-   * 消费（返回 true=吞，如搜索态吞字符、Matrix 操作键）；③全局键（1/2/3 tab、ctrl+r
-   * refresh、? help、ESC/ctrl+c 退出）。exitOnCtrlC=false（index.tsx），ctrl+c 全由此处理。
+   * 派发优先级：①弹窗打开→ESC/ctrl+c 关栈顶，其余键交弹窗内部组件；②shift+L 语言热切换
+   * （全局）；③view handler 优先消费（返回 true=吞）；④全局键（1/2/3 tab、ctrl+r refresh、
+   * ? help、ESC/ctrl+c 退出）。exitOnCtrlC=false（index.tsx），ctrl+c 全由此处理。
    */
   useKeyboard(
     createAppShellKeyHandler({
@@ -110,7 +120,8 @@ function AppShell() {
       setTab,
       refresh: () => void data.refresh(),
       showHelp,
-      exit: exitTui
+      exit: exitTui,
+      toggleLang: () => void i18n.toggle()
     })
   )
 
@@ -120,26 +131,26 @@ function AppShell() {
       <box flexDirection="column" gap={1}>
         <box flexDirection="row" justifyContent="space-between">
           <text fg={theme.text} attributes={TextAttributes.BOLD}>
-            Keybindings
+            {i18n.t("help.title")}
           </text>
-          <text fg={theme.textMuted}>esc</text>
+          <text fg={theme.textMuted}>{i18n.t("help.esc")}</text>
         </box>
-        <text fg={theme.accent}>global</text>
-        <text fg={theme.textMuted}>1/2/3 tabs · ctrl+r refresh · ? help · esc/ctrl+c exit</text>
-        <text fg={theme.accent}>skill×agent</text>
-        <text fg={theme.textMuted}>{"↑↓←→/hjkl move · enter toggle · a row-on · d delete · r review · i info · m agents (space toggle · a add) · / search"}</text>
-        <text fg={theme.accent}>source</text>
-        <text fg={theme.textMuted}>{"a add · u update · d remove · e/x enable/disable · enter detail"}</text>
-        <text fg={theme.accent}>doctor</text>
-        <text fg={theme.textMuted}>f fix selected · F fix all · ↑↓ move</text>
-        <text fg={theme.textMuted}>esc to close</text>
+        <text fg={theme.accent}>{i18n.t("help.globalSection")}</text>
+        <text fg={theme.textMuted}>{i18n.t("help.globalLine")}</text>
+        <text fg={theme.accent}>{i18n.t("help.skillSection")}</text>
+        <text fg={theme.textMuted}>{i18n.t("help.skillLine")}</text>
+        <text fg={theme.accent}>{i18n.t("help.sourceSection")}</text>
+        <text fg={theme.textMuted}>{i18n.t("help.sourceLine")}</text>
+        <text fg={theme.accent}>{i18n.t("help.doctorSection")}</text>
+        <text fg={theme.textMuted}>{i18n.t("help.doctorLine")}</text>
+        <text fg={theme.textMuted}>{i18n.t("help.close")}</text>
       </box>
     ))
   }
 
   const statusMessage = createMemo(() => {
-    if (data.snapshot.loading) return "loading"
-    if (data.snapshot.error) return "error"
+    if (data.snapshot.loading) return i18n.t("common.loadingShort")
+    if (data.snapshot.error) return i18n.t("common.errorShort")
     return undefined
   })
 
@@ -151,9 +162,9 @@ function AppShell() {
         flexDirection="column"
         backgroundColor={theme.background}
       >
-        {/* TabBar（静态常量，map 一次即可；tab() 在 JSX getter 里响应式） */}
+        {/* TabBar（tabs() 响应式：语言切换后 label 重算；tab() 在 JSX getter 里响应式） */}
         <box flexDirection="row" backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1}>
-          {TABS.map((t) => (
+          {tabs().map((t) => (
             <box
               paddingLeft={1}
               paddingRight={1}
@@ -180,9 +191,8 @@ function AppShell() {
         </box>
 
         {/* StatusBar（design §13 契约：接受 hints，child-3 扩展） */}
-        <StatusBar hints={TAB_HINTS[tab()]} message={statusMessage()} theme={theme} />
+        <StatusBar hints={tabHints()} message={statusMessage()} theme={theme} />
       </box>
     </ViewKeyProvider>
   )
 }
-

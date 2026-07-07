@@ -26,6 +26,7 @@ Agent Skills Mesh（命令名 `asm`）把"技能**从哪来**、**存在哪**、
 - **健康检查（doctor）** — external / broken-link / orphan / source-missing / conflict，一键定位与修复
 - **跨 agent 统一** — 一个技能，按需启用到任意数量的 agent
 - **agent 智能启用 + 自定义** — `init` 按安装探测自动启用；支持自定义 agent（任意 `skills_dir`），TUI/CLI 集中启停、添加、删除（内置不可删）
+- **中英文双语** — 默认跟随系统语言（macOS 读 `AppleLanguages`，`$LANG` 不准也能识别）；CLI/TUI 全覆盖；`--lang` / `ASM_LANG` / config / TUI `Shift+L` 多通道切换
 
 ### 安装
 
@@ -162,6 +163,16 @@ enabled = true
 
 # 可配置任意数量的 agent …
 ```
+
+#### 语言 / Language
+
+界面支持中文（zh-CN）与英文（en）双语，默认跟随系统 locale（中文系统→中文，其他→英文）。
+
+- **CLI**：`asm --lang zh skill list`（或 `--lang en` / `--lang auto`）；也可设环境变量 `ASM_LANG=zh`
+- **TUI**：运行时按 `L`（Shift+l）即时切换中/英，偏好写回 config
+- **config**：`settings.language = "zh-CN" | "en" | "auto"`（默认 `auto`，手动设置优先级最高）
+
+优先级：`--lang` flag > `ASM_LANG` > `config.language` > 系统 locale > `en`
 
 ### TODO
 

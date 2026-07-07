@@ -12,6 +12,7 @@ import { gitClone, gitPullFfOnly } from "../../utils/git.js";
 import { sha256Directory } from "../../utils/hash.js";
 import { assertPathInside } from "../../utils/safe-path.js";
 import { detachAgentSymlinks, getSsotRoot } from "./ssot-service.js";
+import { bizError } from "../errors.js";
 
 
 export interface SyncResult {
@@ -81,13 +82,13 @@ export async function addSource(configStore: ConfigStore, stateStore: StateStore
 /** 注册本地多 skill 目录为 `local-dir` source；重复 path 报错。 */
 async function addLocalDirSource(configStore: ConfigStore, dirPath: string, options: { id?: string } = {}): Promise<SourceConfig> {
   const resolved = resolveConfiguredPath(dirPath);
-  if (!(await pathExists(resolved))) throw new Error(`Source path does not exist: ${resolved}`);
+  if (!(await pathExists(resolved))) throw bizError("SOURCE_PATH_NOT_EXIST", { path: resolved }, `Source path does not exist: ${resolved}`);
   const stat = await fs.stat(resolved);
-  if (!stat.isDirectory()) throw new Error(`Source path is not a directory: ${resolved}`);
+  if (!stat.isDirectory()) throw bizError("SOURCE_PATH_NOT_DIRECTORY", { path: resolved }, `Source path is not a directory: ${resolved}`);
 
   const config = await configStore.read();
   const duplicate = config.sources.find((source) => resolveConfiguredPath(source.path) === resolved);
-  if (duplicate) throw new Error(`Source already registered: id=${duplicate.id} path=${duplicate.path}`);
+  if (duplicate) throw bizError("SOURCE_ALREADY_REGISTERED", { id: duplicate.id, path: duplicate.path }, `Source already registered: id=${duplicate.id} path=${duplicate.path}`);
 
   const id = resolveId(config, options.id, slugify(dirPath));
   const source: SourceConfig = { id, name: path.basename(resolved), type: "local-dir", path: resolved, enabled: true, readonly: false };
@@ -100,11 +101,11 @@ async function addLocalDirSource(configStore: ConfigStore, dirPath: string, opti
 async function addSingleSkillSource(configStore: ConfigStore, dirPath: string, options: { id?: string } = {}): Promise<SourceConfig> {
   const resolved = resolveConfiguredPath(dirPath);
   if (!(await pathExists(path.join(resolved, "SKILL.md")))) {
-    throw new Error(`Not a skill directory (missing SKILL.md): ${resolved}`);
+    throw bizError("SOURCE_NOT_SKILL_DIR", { path: resolved }, `Not a skill directory (missing SKILL.md): ${resolved}`);
   }
   const config = await configStore.read();
   const duplicate = config.sources.find((source) => resolveConfiguredPath(source.path) === resolved);
-  if (duplicate) throw new Error(`Source already registered: id=${duplicate.id} path=${duplicate.path}`);
+  if (duplicate) throw bizError("SOURCE_ALREADY_REGISTERED", { id: duplicate.id, path: duplicate.path }, `Source already registered: id=${duplicate.id} path=${duplicate.path}`);
 
   const id = resolveId(config, options.id, slugify(dirPath));
   const source: SourceConfig = { id, name: path.basename(resolved), type: "single-skill", path: resolved, enabled: true, readonly: false };
@@ -117,7 +118,7 @@ async function addSingleSkillSource(configStore: ConfigStore, dirPath: string, o
 async function inferSourceType(target: string): Promise<AddSourceType> {
   if (isUrl(target)) return "repo";
   const resolved = resolveConfiguredPath(target);
-  if (!(await pathExists(resolved))) throw new Error(`Source path does not exist: ${resolved}`);
+  if (!(await pathExists(resolved))) throw bizError("SOURCE_PATH_NOT_EXIST", { path: resolved }, `Source path does not exist: ${resolved}`);
   if (await pathExists(path.join(resolved, "SKILL.md"))) return "skill";
   try {
     const entries = await fs.readdir(resolved, { withFileTypes: true });
@@ -142,12 +143,12 @@ function isUrl(target: string): boolean {
 export async function addRepoSource(configStore: ConfigStore, gitUrl: string, options: { id?: string; branch?: string } = {}): Promise<SourceConfig> {
   const config = await configStore.read();
   const dup = config.sources.find((source) => source.type === "git-repo" && source.url === gitUrl);
-  if (dup) throw new Error(`Git repo already registered: id=${dup.id} url=${gitUrl}`);
+  if (dup) throw bizError("GIT_REPO_ALREADY_REGISTERED", { id: dup.id, url: gitUrl }, `Git repo already registered: id=${dup.id} url=${gitUrl}`);
 
   const id = resolveId(config, options.id, slugify(gitUrl));
   const reposDir = resolveConfiguredPath(config.paths.repos);
   const dest = path.join(reposDir, id);
-  if (await pathExists(dest)) throw new Error(`Repo target already exists: ${dest}`);
+  if (await pathExists(dest)) throw bizError("REPO_TARGET_EXISTS", { dest }, `Repo target already exists: ${dest}`);
 
   const source: SourceConfig = {
     id,
@@ -267,7 +268,7 @@ export async function removeSource(configStore: ConfigStore, stateStore: StateSt
       const cloneTarget = resolveConfiguredPath(source.path);
       const rel = path.relative(reposDir, cloneTarget);
       if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
-        throw new Error(`--purge refused: git repo path is not under repos dir: ${cloneTarget}`);
+        throw bizError("PURGE_REFUSED_NOT_UNDER_REPOS", { path: cloneTarget }, `--purge refused: git repo path is not under repos dir: ${cloneTarget}`);
       }
       await safeRmRf(cloneTarget);
     }
@@ -292,14 +293,14 @@ export async function setSourceEnabled(configStore: ConfigStore, id: string, ena
 function resolveId(config: AppConfig, custom: string | undefined, fallback: string): string {
   const id = custom ?? dedupeId(config, fallback);
   if (config.sources.some((source) => source.id === id)) {
-    throw new Error(`Source id already exists: ${id}`);
+    throw bizError("SOURCE_ID_EXISTS", { id }, `Source id already exists: ${id}`);
   }
   return id;
 }
 
 function requireSource(config: AppConfig, id: string): SourceConfig {
   const source = config.sources.find((entry) => entry.id === id);
-  if (!source) throw new Error(`Unknown source id: ${id}`);
+  if (!source) throw bizError("SOURCE_ID_UNKNOWN", { id }, `Unknown source id: ${id}`);
   return source;
 }
 

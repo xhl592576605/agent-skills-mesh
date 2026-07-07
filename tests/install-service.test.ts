@@ -7,6 +7,8 @@ import type { IndexFile } from "../src/core/models/index.js";
 import type { SkillRecord } from "../src/core/models/skill.js";
 import { applyInstallPlan, applyRepairPlan, applyUninstallPlan, buildInstallPlan, buildRepairPlan, buildUninstallPlan, detectInstallation } from "../src/core/services/install-service.js";
 import { StateStore } from "../src/core/storage/state-store.js";
+import { isBizError } from "../src/core/errors.js";
+import type { InstallPlan, RepairPlan, UninstallPlan } from "../src/core/models/install-plan.js";
 
 async function tempDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "asm-install-"));
@@ -51,6 +53,11 @@ function skillRecord(name: string, sourcePath: string): SkillRecord {
 
 function indexWith(skill: SkillRecord): IndexFile {
   return { version: 1, updatedAt: new Date().toISOString(), sources: {}, skills: { [skill.name]: skill }, installations: {}, issues: [] };
+}
+
+/** 与 {@link skillRecord} 同结构但清空 candidates，用于触发 NO_INSTALLABLE_CANDIDATE。 */
+function skillRecordNoCandidates(name: string): SkillRecord {
+  return { ...skillRecord(name, "/unused-source"), candidates: [] };
 }
 
 describe("install service", () => {
@@ -218,5 +225,84 @@ describe("repair service", () => {
     const plan = await buildRepairPlan(disabledConfig, indexWith(skillRecord("foo", source)), "foo", "pi");
     expect(plan.hasConflict).toBe(true);
     expect(plan.warnings.some((w) => /disabled/i.test(w))).toBe(true);
+  });
+});
+
+describe("install service error codes", () => {
+  // 捕获 throw 并断言为 BizError + code，替代 message 字符串断言（Phase B 错误码体系）。
+  async function capture(fn: () => Promise<unknown>): Promise<unknown> {
+    try {
+      await fn();
+    } catch (e) {
+      return e;
+    }
+    throw new Error("expected rejection but none was thrown");
+  }
+
+  test("buildInstallPlan throws SKILL_NOT_FOUND for unknown skill", async () => {
+    const cfg = config(await tempDir());
+    const emptyIndex: IndexFile = { version: 1, updatedAt: new Date().toISOString(), sources: {}, skills: {}, installations: {}, issues: [] };
+    const err = await capture(() => buildInstallPlan(cfg, emptyIndex, "nope", "pi"));
+    expect(isBizError(err)).toBe(true);
+    expect((err as { code: string }).code).toBe("SKILL_NOT_FOUND");
+    // 英文兌底 message 保留，供日志与非 i18n 场景。
+    expect((err as Error).message).toBe("Skill not found: nope");
+    expect((err as { params: Record<string, string | number> }).params).toEqual({ name: "nope" });
+  });
+
+  test("buildInstallPlan throws AGENT_NOT_FOUND for unknown agent", async () => {
+    const source = await tempDir();
+    await fs.writeFile(path.join(source, "SKILL.md"), "# skill");
+    const cfg = config(await tempDir());
+    cfg.sources[0].path = source;
+    const err = await capture(() => buildInstallPlan(cfg, indexWith(skillRecord("foo", source)), "foo", "ghost"));
+    expect(isBizError(err)).toBe(true);
+    expect((err as { code: string }).code).toBe("AGENT_NOT_FOUND");
+    expect((err as { params: Record<string, string | number> }).params).toEqual({ id: "ghost" });
+  });
+
+  test("buildInstallPlan throws NO_INSTALLABLE_CANDIDATE when skill has no candidates", async () => {
+    const cfg = config(await tempDir());
+    const err = await capture(() => buildInstallPlan(cfg, indexWith(skillRecordNoCandidates("foo")), "foo", "pi"));
+    expect(isBizError(err)).toBe(true);
+    expect((err as { code: string }).code).toBe("NO_INSTALLABLE_CANDIDATE");
+    expect((err as { params: Record<string, string | number> }).params).toEqual({ name: "foo" });
+  });
+
+  test("buildRepairPlan throws SKILL_NOT_FOUND for unknown skill", async () => {
+    const cfg = config(await tempDir());
+    const emptyIndex: IndexFile = { version: 1, updatedAt: new Date().toISOString(), sources: {}, skills: {}, installations: {}, issues: [] };
+    const err = await capture(() => buildRepairPlan(cfg, emptyIndex, "nope", "pi"));
+    expect(isBizError(err)).toBe(true);
+    expect((err as { code: string }).code).toBe("SKILL_NOT_FOUND");
+  });
+
+  test("applyInstallPlan throws INSTALL_PLAN_CONFLICT on conflicted plan", async () => {
+    const plan = { id: "x", skillName: "foo", actions: [], hasConflict: true, warnings: [] } as unknown as InstallPlan;
+    const err = await capture(() => applyInstallPlan(plan));
+    expect(isBizError(err)).toBe(true);
+    expect((err as { code: string }).code).toBe("INSTALL_PLAN_CONFLICT");
+  });
+
+  test("applyUninstallPlan throws UNINSTALL_PLAN_CONFLICT on conflicted plan", async () => {
+    const plan = { id: "x", skillName: "foo", actions: [], hasConflict: true, warnings: [] } as unknown as UninstallPlan;
+    const err = await capture(() => applyUninstallPlan(plan));
+    expect(isBizError(err)).toBe(true);
+    expect((err as { code: string }).code).toBe("UNINSTALL_PLAN_CONFLICT");
+  });
+
+  test("applyRepairPlan throws REPAIR_PLAN_CONFLICT on conflicted plan", async () => {
+    const plan = { id: "x", skillName: "foo", agentId: "pi", targetPath: "/x", newTarget: "/y", hasConflict: true, warnings: [] } as unknown as RepairPlan;
+    const err = await capture(() => applyRepairPlan(plan));
+    expect(isBizError(err)).toBe(true);
+    expect((err as { code: string }).code).toBe("REPAIR_PLAN_CONFLICT");
+  });
+
+  test("applyRepairPlan throws REPAIR_TARGET_MISSING when target absent", async () => {
+    const plan = { id: "x", skillName: "foo", agentId: "pi", targetPath: path.join(await tempDir(), "missing"), newTarget: "/y", hasConflict: false, warnings: [] } as unknown as RepairPlan;
+    const err = await capture(() => applyRepairPlan(plan));
+    expect(isBizError(err)).toBe(true);
+    expect((err as { code: string }).code).toBe("REPAIR_TARGET_MISSING");
+    expect((err as { params: Record<string, string | number> }).params).toMatchObject({ path: plan.targetPath });
   });
 });

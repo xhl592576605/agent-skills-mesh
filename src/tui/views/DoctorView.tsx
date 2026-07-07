@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import { useTerminalDimensions } from "@opentui/solid"
 import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js"
 import { useTheme } from "../context/theme.js"
+import { useI18n } from "../context/i18n.js"
 import { useData } from "../context/data.js"
 import { useDialog } from "../context/dialog.js"
 import { useViewKey, type ViewKeyHandler } from "../context/view-key.js"
@@ -11,6 +12,7 @@ import { StateStore } from "../../core/storage/state-store.js"
 import { runDoctor, type DoctorCheck, type DoctorFix } from "../../core/services/doctor-service.js"
 import { applyRepairPlan, buildRepairPlan } from "../../core/services/install-service.js"
 import { ConfirmDialog } from "../dialogs/ConfirmDialog.js"
+import { errorMessage } from "../../i18n/index.js"
 
 /**
  * Doctor 视图（design §9 `doctor` 映射）。
@@ -27,6 +29,7 @@ import { ConfirmDialog } from "../dialogs/ConfirmDialog.js"
  */
 export function DoctorView() {
   const theme = useTheme()
+  const i18n = useI18n()
   const data = useData()
   const dialog = useDialog()
   const viewKey = useViewKey()
@@ -54,7 +57,7 @@ export function DoctorView() {
       )
       setChecks(result)
     } catch (err) {
-      setMessage(`doctor failed: ${err instanceof Error ? err.message : String(err)}`)
+      setMessage(i18n.t("doctorView.doctorFail", { message: errorMessage(err, i18n.locale()) }))
     }
   }
 
@@ -110,23 +113,23 @@ export function DoctorView() {
     const check = selected()
     if (!check) return
     if (!check.fix) {
-      setMessage(`${check.kind}: no auto-fix (manual action needed)`)
+      setMessage(i18n.t("doctorView.noFix", { kind: check.kind }))
       return
     }
     const ok = await ConfirmDialog.show(
       dialog,
-      `Fix ${check.kind}?`,
+      i18n.t("doctorView.fixTitle", { kind: check.kind }),
       check.message,
-      { confirmLabel: "fix", cancelLabel: "cancel" }
+      { confirmLabel: i18n.t("btn.fix"), cancelLabel: i18n.t("btn.cancel") }
     )
     if (!ok) return
     setBusy(true)
     try {
       await applyFix(check.fix)
       await sync()
-      setMessage(`fixed: ${check.kind}`)
+      setMessage(i18n.t("doctorView.fixOk", { kind: check.kind }))
     } catch (err) {
-      setMessage(`fix failed: ${err instanceof Error ? err.message : String(err)}`)
+      setMessage(i18n.t("doctorView.fixFail", { message: errorMessage(err, i18n.locale()) }))
     } finally {
       setBusy(false)
     }
@@ -135,14 +138,14 @@ export function DoctorView() {
   async function fixAll(): Promise<void> {
     const fixable = checks().filter((c) => c.fix)
     if (fixable.length === 0) {
-      setMessage("no fixable issues")
+      setMessage(i18n.t("doctorView.noFixable"))
       return
     }
     const ok = await ConfirmDialog.show(
       dialog,
-      "Fix all fixable?",
-      `${fixable.length} issue(s): ${fixable.map((c) => c.kind).join(", ")}`,
-      { confirmLabel: "fix all", cancelLabel: "cancel" }
+      i18n.t("doctorView.fixAllTitle"),
+      i18n.t("doctorView.fixAllMsg", { count: fixable.length, kinds: fixable.map((c) => c.kind).join(", ") }),
+      { confirmLabel: i18n.t("btn.fixAll"), cancelLabel: i18n.t("btn.cancel") }
     )
     if (!ok) return
     setBusy(true)
@@ -154,10 +157,10 @@ export function DoctorView() {
           await applyFix(check.fix!)
           await sync()
         } catch (err) {
-          errors.push(`${check.kind}: ${err instanceof Error ? err.message : String(err)}`)
+          errors.push(`${check.kind}: ${errorMessage(err, i18n.locale())}`)
         }
       }
-      setMessage(errors.length ? `fixed with ${errors.length} error(s): ${errors.join("; ")}` : `fixed ${fixable.length} issue(s)`)
+      setMessage(errors.length ? i18n.t("doctorView.fixAllResultPartial", { count: errors.length, errors: errors.join("; ") }) : i18n.t("doctorView.fixAllResultOk", { count: fixable.length }))
     } finally {
       setBusy(false)
     }
@@ -175,43 +178,43 @@ export function DoctorView() {
     }
     if (fix.type === "repair-broken-link" && fix.skillName && fix.agentId) {
       const { config, index, state } = data.snapshot
-      if (!config || !index || !state) throw new Error("snapshot not loaded")
+      if (!config || !index || !state) throw new Error(i18n.t("doctorView.snapshotNotLoaded"))
       const plan = await buildRepairPlan(config, index, fix.skillName, fix.agentId, state)
-      if (plan.hasConflict) throw new Error(`repair conflict: ${plan.warnings.join("; ")}`)
+      if (plan.hasConflict) throw new Error(i18n.t("doctorView.repairConflict", { warnings: plan.warnings.join("; ") }))
       await applyRepairPlan(plan)
       return
     }
-    throw new Error(`unsupported fix type: ${fix.type}`)
+    throw new Error(i18n.t("doctorView.unsupportedFix", { type: fix.type }))
   }
 
   const statusColor = (status: DoctorCheck["status"]) =>
     status === "ok" ? theme.success : status === "warning" ? theme.warning : theme.danger
 
   const statusLabel = (status: DoctorCheck["status"]) =>
-    status === "ok" ? "ok" : status === "warning" ? "warn" : "error"
+    status === "ok" ? i18n.t("doctor.statusOk") : status === "warning" ? i18n.t("doctor.statusWarn") : i18n.t("doctor.statusError")
 
   const statusLine = () => {
-    if (busy()) return "working..."
+    if (busy()) return i18n.t("doctorView.working")
     if (message()) return message()
     const c = checks()
     const errors = c.filter((x) => x.status === "error").length
     const warns = c.filter((x) => x.status === "warning").length
-    return `${c.length} check(s) · ${errors} error · ${warns} warn`
+    return i18n.t("doctorView.statusLine", { count: c.length, errors, warns })
   }
 
   return (
     <box flexDirection="column" flexGrow={1} width={dim().width}>
       <box flexDirection="row" backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1}>
-        <text width={6} fg={theme.textMuted}>state</text>
-        <text width={20} fg={theme.textMuted}>kind</text>
-        <text fg={theme.textMuted}>message · fix</text>
+        <text width={6} fg={theme.textMuted}>{i18n.t("doctorView.headerState")}</text>
+        <text width={20} fg={theme.textMuted}>{i18n.t("doctorView.headerKind")}</text>
+        <text fg={theme.textMuted}>{i18n.t("doctorView.headerMsg")}</text>
       </box>
       <box flexGrow={1} flexDirection="column">
         <Show
           when={checks().length > 0}
           fallback={
             <box paddingLeft={1}>
-              <text fg={theme.textMuted}>Running doctor...</text>
+              <text fg={theme.textMuted}>{i18n.t("doctorView.running")}</text>
             </box>
           }
         >
@@ -241,7 +244,7 @@ export function DoctorView() {
                   wrapMode="none"
                 >
                   {check.message}
-                  {check.fix ? "  [fixable]" : ""}
+                  {check.fix ? i18n.t("doctorView.fixable") : ""}
                 </text>
               </box>
             )}

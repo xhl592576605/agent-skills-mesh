@@ -25,6 +25,8 @@ Agent Skills Mesh (`asm`) splits skill management into three layers — **where 
 - **Interactive TUI** — built on [@opentui/solid](https://opentui.com): skill×agent matrix + web-style modal dialogs + fuzzy search
 - **Health checks (doctor)** — external / broken-link / orphan / source-missing / conflict, with one-key locate & repair
 - **Cross-agent unification** — one skill, enabled into any number of agents on demand
+- **Smart + custom agent enablement** — `init` auto-enables agents by install detection; custom agents (any `skills_dir`) with centralized enable/disable/add/remove (built-ins cannot be removed)
+- **Bilingual (zh/en)** — defaults to system locale (reads `AppleLanguages` on macOS, handling `$LANG` mismatch); full CLI/TUI coverage; switch via `--lang` / `ASM_LANG` / config / TUI `Shift+L`
 
 ### Installation
 
@@ -154,6 +156,16 @@ enabled = true
 
 # configure as many agents as you need …
 ```
+
+#### Language
+
+The UI supports Chinese (zh-CN) and English (en), defaulting to system locale (Chinese system → zh-CN, others → en).
+
+- **CLI**: `asm --lang zh skill list` (or `--lang en` / `--lang auto`); or set `ASM_LANG=zh`
+- **TUI**: press `L` (Shift+l) at runtime to toggle zh/en instantly; preference is persisted to config
+- **config**: `settings.language = "zh-CN" | "en" | "auto"` (default `auto`; manual setting takes precedence)
+
+Priority: `--lang` flag > `ASM_LANG` > `config.language` > system locale > `en`
 
 ### License
 

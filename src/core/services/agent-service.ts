@@ -5,6 +5,7 @@ import { detectAgentInstalled, isBuiltinAgent, type ConfigStore } from "../stora
 import type { StateStore } from "../storage/state-store.js";
 import { pathExists } from "../../utils/fs.js";
 import { resolveConfiguredPath } from "../../utils/path.js";
+import { bizError } from "../errors.js";
 
 /**
  * Agent 启停服务（task 07-06-cli-tui-bugfix · R5）。
@@ -41,7 +42,7 @@ export async function listAgents(config: AppConfig): Promise<AgentRow[]> {
 export async function setAgentEnabled(configStore: ConfigStore, id: string, enabled: boolean): Promise<void> {
   const config = await configStore.read();
   const agent = config.agents[id];
-  if (!agent) throw new Error(`Unknown agent: ${id}`);
+  if (!agent) throw bizError("AGENT_NOT_FOUND", { id }, `Unknown agent: ${id}`);
   agent.enabled = enabled;
   await configStore.write(config);
 }
@@ -56,9 +57,9 @@ export async function addAgent(
   id: string,
   options: { skillsDir: string; name?: string; enabled?: boolean }
 ): Promise<AgentConfig> {
-  if (!/^[a-z0-9-]+$/.test(id)) throw new Error(`Invalid agent id: ${id} (allowed: lowercase [a-z0-9-])`);
+  if (!/^[a-z0-9-]+$/.test(id)) throw bizError("AGENT_ID_INVALID", { id }, `Invalid agent id: ${id} (allowed: lowercase [a-z0-9-])`);
   const config = await configStore.read();
-  if (config.agents[id]) throw new Error(`Agent already exists: ${id}`);
+  if (config.agents[id]) throw bizError("AGENT_ALREADY_EXISTS", { id }, `Agent already exists: ${id}`);
   const agent: AgentConfig = {
     name: options.name?.trim() || id,
     enabled: options.enabled ?? true,
@@ -80,8 +81,8 @@ export async function addAgent(
 export async function removeAgent(configStore: ConfigStore, stateStore: StateStore, id: string): Promise<void> {
   const config = await configStore.read();
   const agent = config.agents[id];
-  if (!agent) throw new Error(`Unknown agent: ${id}`);
-  if (isBuiltinAgent(id)) throw new Error(`Cannot remove builtin agent: ${id} (disable it via space instead)`);
+  if (!agent) throw bizError("AGENT_NOT_FOUND", { id }, `Unknown agent: ${id}`);
+  if (isBuiltinAgent(id)) throw bizError("AGENT_BUILTIN_NO_REMOVE", { id }, `Cannot remove builtin agent: ${id} (disable it via space instead)`);
 
   // 1) 删 agent skills_dir 下指向 SSOT 的 symlink（ASM 管理的）；real dir / 外部 symlink 保留。
   await removeAsmSymlinks(resolveConfiguredPath(agent.skills_dir), resolveConfiguredPath(config.paths.skills));

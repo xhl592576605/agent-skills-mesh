@@ -5,6 +5,7 @@ import type { InstallationRecord } from "../../core/models/installation.js"
 import type { SkillRecord } from "../../core/models/skill.js"
 import type { MatrixState } from "../state/matrix.js"
 import { type AgentColumn, cellInfo, installationKey } from "../state/projection.js"
+import { type TranslateFn } from "../context/i18n.js"
 
 /**
  * 选中 skill 的详情面板（design §6 Inspector）。
@@ -18,6 +19,7 @@ export interface InspectorProps {
   installations: Record<string, InstallationRecord>
   matrix: MatrixState
   theme: Theme
+  t: TranslateFn
 }
 
 export function Inspector(props: InspectorProps) {
@@ -31,7 +33,7 @@ export function Inspector(props: InspectorProps) {
     >
       <Show
         when={props.skill}
-        fallback={<text fg={theme.textMuted}>No skill selected.</text>}
+        fallback={<text fg={theme.textMuted}>{props.t("inspector.noSkill")}</text>}
       >
         {(skill: () => SkillRecord) => (
           <box flexDirection="column" gap={0}>
@@ -40,12 +42,12 @@ export function Inspector(props: InspectorProps) {
                 {skill().displayName || skill().name}
               </text>
               <text fg={theme.textMuted}>
-                ({skill().name}) · status: {skill().status} · candidates: {skill().candidates.length}
+                {props.t("inspector.summary", { name: skill().name, status: skill().status, count: skill().candidates.length })}
               </text>
             </box>
             <box>
               <text fg={theme.textMuted}>
-                {skill().description?.slice(0, 80) ?? "(no description)"}
+                {skill().description?.slice(0, 80) ?? props.t("inspector.noDesc")}
               </text>
             </box>
             <box flexDirection="row" gap={1}>

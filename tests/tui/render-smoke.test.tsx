@@ -31,6 +31,9 @@ function makeSkill(name: string): SkillRecord {
   return { name, displayName: name, description: undefined, tags: [], status: "managed", candidates: [] }
 }
 
+/** 测试用 mock 翻译：直接返回 key（表头断言不依赖译文）。 */
+const mockT = ((key: string) => key) as never
+
 describe.skipIf(!nativeOk)("testRender smoke — Matrix 组件", () => {
   it("渲染表头与 [off] 单元格标签", async () => {
     const { testRender } = await import("@opentui/solid")
@@ -49,6 +52,7 @@ describe.skipIf(!nativeOk)("testRender smoke — Matrix 组件", () => {
           installations={{}}
           matrix={matrix}
           theme={theme}
+          t={mockT}
           viewport={5}
         />
       ),
@@ -78,6 +82,7 @@ describe.skipIf(!nativeOk)("testRender smoke — Matrix 组件", () => {
           installations={{}}
           matrix={matrix}
           theme={theme}
+          t={mockT}
           viewport={5}
         />
       ),

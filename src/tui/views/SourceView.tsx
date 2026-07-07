@@ -1,6 +1,7 @@
 import { useTerminalDimensions } from "@opentui/solid"
 import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js"
 import { useTheme } from "../context/theme.js"
+import { useI18n, type TranslateFn } from "../context/i18n.js"
 import { useData } from "../context/data.js"
 import { useDialog } from "../context/dialog.js"
 import { useViewKey } from "../context/view-key.js"
@@ -23,6 +24,7 @@ import { AddSourceDialog } from "../dialogs/AddSourceDialog.js"
 import { MultiSelectDialog } from "../dialogs/MultiSelectDialog.js"
 import { SkillMdDialog } from "../dialogs/SkillMdDialog.js"
 import { skillAdd } from "../../core/services/skill-service.js"
+import { errorMessage } from "../../i18n/index.js"
 import path from "node:path"
 import {
   createSourceKeyHandler,
@@ -46,6 +48,7 @@ export { createSourceKeyHandler, type SourceKeyDeps } from "../state/source-keys
  */
 export function SourceView() {
   const theme = useTheme()
+  const i18n = useI18n()
   const data = useData()
   const dialog = useDialog()
   const viewKey = useViewKey()
@@ -90,7 +93,7 @@ export function SourceView() {
   }
 
   async function doAdd(): Promise<void> {
-    const input = await AddSourceDialog.show(dialog)
+    const input = await AddSourceDialog.show(dialog, i18n.locale())
     if (!input) return
     try {
       const configStore = new ConfigStore()
@@ -101,24 +104,25 @@ export function SourceView() {
       })
       await sync()
       setMessage(
-        `added ${result.source.id} (${result.source.type})${result.reboundOrphans.length ? ` · rebound: ${result.reboundOrphans.join(", ")}` : ""}`
+        i18n.t("sourceView.addOk", { id: result.source.id, type: result.source.type }) +
+          (result.reboundOrphans.length ? i18n.t("sourceView.reboundSuffix", { list: result.reboundOrphans.join(", ") }) : "")
       )
     } catch (err) {
-      setMessage(`add failed: ${errMsg(err)}`)
+      setMessage(i18n.t("sourceView.addFail", { message: errorMessage(err, i18n.locale()) }))
     }
   }
 
   async function doUpdate(): Promise<void> {
     const src = selected()
     if (!src) {
-      setMessage("no source selected")
+      setMessage(i18n.t("sourceView.noSource"))
       return
     }
     const ok = await ConfirmDialog.show(
       dialog,
-      "Update source?",
-      `${src.id} (${src.type})\n${src.url ?? src.path}`,
-      { confirmLabel: "update", cancelLabel: "cancel" }
+      i18n.t("sourceView.updateTitle"),
+      i18n.t("sourceView.updateMsg", { id: src.id, type: src.type, target: src.url ?? src.path }),
+      { confirmLabel: i18n.t("btn.update"), cancelLabel: i18n.t("btn.cancel") }
     )
     if (!ok) return
     try {
@@ -131,30 +135,30 @@ export function SourceView() {
       const indexStore = new IndexStore(configStore.home)
       await indexStore.write(await refreshIndex(config, state))
       await data.reload()
-      setMessage(formatUpdateReport(reports))
+      setMessage(formatUpdateReport(reports, i18n.t))
     } catch (err) {
-      setMessage(`update failed: ${errMsg(err)}`)
+      setMessage(i18n.t("sourceView.updateFail", { message: errorMessage(err, i18n.locale()) }))
     }
   }
 
   async function doRemove(): Promise<void> {
     const src = selected()
     if (!src) {
-      setMessage("no source selected")
+      setMessage(i18n.t("sourceView.noSource"))
       return
     }
     // purge 选项（SelectDialog）：keep=保留 SSOT（orphan）/ purge=级联删除。
-    const purgeChoice = await SelectDialog.show<"keep" | "purge">(dialog, `Remove ${src.id}`, [
-      { label: "keep SSOT (orphan skills)", value: "keep", description: "skills remain, become orphan" },
-      { label: "purge (cascade delete)", value: "purge", description: "delete SSOT + agent symlinks" }
+    const purgeChoice = await SelectDialog.show<"keep" | "purge">(dialog, i18n.t("sourceView.removeTitleKeep", { id: src.id }), [
+      { label: i18n.t("sourceView.keepSsot"), value: "keep", description: i18n.t("sourceView.keepDesc") },
+      { label: i18n.t("sourceView.purgeOpt"), value: "purge", description: i18n.t("sourceView.purgeDesc") }
     ])
     if (purgeChoice === undefined) return
     const purge = purgeChoice === "purge"
     const ok = await ConfirmDialog.show(
       dialog,
-      purge ? "Purge-remove source?" : "Remove source?",
-      `${src.id}\n${purge ? "cascade-delete SSOT + symlinks" : "skills become orphan"}`,
-      { confirmLabel: purge ? "purge" : "remove", cancelLabel: "cancel" }
+      purge ? i18n.t("sourceView.confirmPurge") : i18n.t("sourceView.confirmRemove"),
+      `${src.id}\n${purge ? i18n.t("sourceView.cascadeDelete") : i18n.t("sourceView.becomeOrphan")}`,
+      { confirmLabel: purge ? i18n.t("btn.purge") : i18n.t("btn.remove"), cancelLabel: i18n.t("btn.cancel") }
     )
     if (!ok) return
     try {
@@ -164,27 +168,27 @@ export function SourceView() {
       await sync()
       setMessage(
         purge
-          ? `removed ${src.id} (purged: ${result.purged.join(", ") || "none"})`
-          : `removed ${src.id} (orphaned: ${result.orphaned.join(", ") || "none"})`
+          ? i18n.t("sourceView.removedPurged", { id: src.id, list: result.purged.join(", ") || i18n.t("common.none") })
+          : i18n.t("sourceView.removedOrphaned", { id: src.id, list: result.orphaned.join(", ") || i18n.t("common.none") })
       )
     } catch (err) {
-      setMessage(`remove failed: ${errMsg(err)}`)
+      setMessage(i18n.t("sourceView.removeFail", { message: errorMessage(err, i18n.locale()) }))
     }
   }
 
   async function doToggle(enabled: boolean): Promise<void> {
     const src = selected()
     if (!src) {
-      setMessage("no source selected")
+      setMessage(i18n.t("sourceView.noSource"))
       return
     }
     try {
       const configStore = new ConfigStore()
       await setSourceEnabled(configStore, src.id, enabled)
       await data.reload()
-      setMessage(`${enabled ? "enabled" : "disabled"} ${src.id}`)
+      setMessage(i18n.t(enabled ? "sourceView.enabled" : "sourceView.disabled", { id: src.id }))
     } catch (err) {
-      setMessage(`${enabled ? "enable" : "disable"} failed: ${errMsg(err)}`)
+      setMessage(i18n.t(enabled ? "sourceView.enableFail" : "sourceView.disableFail", { message: errorMessage(err, i18n.locale()) }))
     }
   }
 
@@ -201,7 +205,7 @@ export function SourceView() {
       .filter((s) => s.candidates.some((c) => c.sourceId === src.id))
       .sort((a, b) => a.name.localeCompare(b.name))
     if (skillsOfSource.length === 0) {
-      setMessage(`${src.id} has no indexed skills (run update/refresh)`)
+      setMessage(i18n.t("sourceView.noIndexedSkills", { id: src.id }))
       return
     }
     const options = skillsOfSource.map((s) => {
@@ -213,7 +217,7 @@ export function SourceView() {
         locked: Boolean(state.installedSkills[s.name]),
       }
     })
-    const chosen = await MultiSelectDialog.show(dialog, `${src.id} skills`, options, {
+    const chosen = await MultiSelectDialog.show(dialog, i18n.t("sourceView.skillsTitle", { id: src.id }), options, {
       onInspect: (v) => SkillMdDialog.show(dialog, v.name, v.mdPath),
     })
     if (!chosen || chosen.length === 0) return
@@ -226,40 +230,41 @@ export function SourceView() {
         await skillAdd(configStore, stateStore, index, item.name)
         added.push(item.name)
       } catch (err) {
-        failed.push(`${item.name} (${err instanceof Error ? err.message : String(err)})`)
+        failed.push(`${item.name} (${errorMessage(err, i18n.locale())})`)
       }
     }
     await sync()
     setMessage(
-      `added: ${added.join(", ") || "none"}${failed.length ? ` · failed: ${failed.join(", ")}` : ""}`
+      i18n.t("sourceView.addedResult", { list: added.join(", ") || i18n.t("common.none") }) +
+        (failed.length ? i18n.t("sourceView.failedSuffix", { list: failed.join(", ") }) : "")
     )
   }
 
-  const statusLine = () => message() || `${sources().length} source(s)`
+  const statusLine = () => message() || i18n.t("sourceView.sourceCount", { count: sources().length })
 
   return (
     <box flexDirection="column" flexGrow={1} width={dim().width}>
       {/* 表头 */}
       <box flexDirection="row" backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1}>
-        <text width={16} fg={theme.textMuted}>id</text>
-        <text width={13} fg={theme.textMuted}>type</text>
-        <text width={9} fg={theme.textMuted}>enabled</text>
-        <text fg={theme.textMuted}>path / meta</text>
+        <text width={16} fg={theme.textMuted}>{i18n.t("sourceView.headerId")}</text>
+        <text width={13} fg={theme.textMuted}>{i18n.t("sourceView.headerType")}</text>
+        <text width={9} fg={theme.textMuted}>{i18n.t("sourceView.headerEnabled")}</text>
+        <text fg={theme.textMuted}>{i18n.t("sourceView.headerPathMeta")}</text>
       </box>
       <box flexGrow={1} flexDirection="column">
         <Show
           when={!data.snapshot.loading}
-          fallback={<text fg={theme.textMuted}>Loading...</text>}
+          fallback={<text fg={theme.textMuted}>{i18n.t("common.loading")}</text>}
         >
           <Show
             when={!data.snapshot.error}
-            fallback={<text fg={theme.danger}>Error: {data.snapshot.error?.message}</text>}
+            fallback={<text fg={theme.danger}>{i18n.t("common.errorLine", { message: data.snapshot.error?.message ?? "" })}</text>}
           >
             <Show
               when={sources().length > 0}
               fallback={
                 <box paddingLeft={1}>
-                  <text fg={theme.textMuted}>No sources. Press `a` to add one.</text>
+                  <text fg={theme.textMuted}>{i18n.t("sourceView.noSources")}</text>
                 </box>
               }
             >
@@ -294,7 +299,7 @@ export function SourceView() {
                             : theme.warning
                       }
                     >
-                      {src.enabled ? "enabled" : "disabled"}
+                      {src.enabled ? i18n.t("status.enabled") : i18n.t("status.disabled")}
                     </text>
                     <text
                       fg={i() === cursor() ? theme.backgroundPanel : theme.textMuted}
@@ -319,17 +324,13 @@ export function SourceView() {
   )
 }
 
-function errMsg(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
-
-function formatUpdateReport(reports: SourceUpdateReport[]): string {
-  if (!reports.length) return "no sources updated"
+function formatUpdateReport(reports: SourceUpdateReport[], t: TranslateFn): string {
+  if (!reports.length) return t("sourceView.noSourcesUpdated")
   const r = reports[0]
   const detail = r.success
     ? r.updatableSkills.length
-      ? `updatable: ${r.updatableSkills.join(", ")}`
-      : "up-to-date"
-    : `failed: ${r.error ?? "unknown"}`
-  return `${r.sourceId}: ${detail}`
+      ? t("status.updatable", { list: r.updatableSkills.join(", ") })
+      : t("status.upToDate")
+    : t("status.failedDetail", { error: r.error ?? "unknown" })
+  return t("sourceView.reportLine", { sourceId: r.sourceId, detail })
 }

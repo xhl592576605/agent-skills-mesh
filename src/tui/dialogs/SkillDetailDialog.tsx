@@ -2,8 +2,10 @@ import { TextAttributes } from "@opentui/core"
 import { useKeyboard } from "@opentui/solid"
 import { For, Show, createMemo, type ParentProps } from "solid-js"
 import { useTheme } from "../context/theme.js"
+import { useI18n } from "../context/i18n.js"
 import { useData } from "../context/data.js"
 import { useDialog, type DialogContextValue } from "../context/dialog.js"
+import { errorMessage } from "../../i18n/index.js"
 import { ConfigStore } from "../../core/storage/config-store.js"
 import { IndexStore } from "../../core/storage/index-store.js"
 import { StateStore } from "../../core/storage/state-store.js"
@@ -29,6 +31,7 @@ export interface SkillDetailDialogProps {
 
 export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
   const theme = useTheme()
+  const i18n = useI18n()
   const data = useData()
   const dialog = useDialog()
 
@@ -81,9 +84,9 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
     if (!installed()) return
     const ok = await ConfirmDialog.show(
       dialog,
-      "Update skill?",
-      `${props.skillName}\nSSOT -> source latest version`,
-      { confirmLabel: "update", cancelLabel: "cancel" }
+      i18n.t("skillDetail.updateTitle"),
+      i18n.t("skillDetail.updateMsg", { name: props.skillName }),
+      { confirmLabel: i18n.t("btn.update"), cancelLabel: i18n.t("btn.cancel") }
     )
     if (!ok) return
     try {
@@ -93,9 +96,9 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
       await sync()
       reopen()
     } catch (err) {
-      void ConfirmDialog.show(dialog, "Update failed", errMsg(err), {
-        confirmLabel: "ok",
-        cancelLabel: "ok"
+      void ConfirmDialog.show(dialog, i18n.t("skillDetail.updateFailed"), errorMessage(err, i18n.locale()), {
+        confirmLabel: i18n.t("btn.ok"),
+        cancelLabel: i18n.t("btn.ok")
       })
     }
   }
@@ -104,9 +107,9 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
     if (!installed()) return
     const ok = await ConfirmDialog.show(
       dialog,
-      "Remove skill?",
-      `${props.skillName}\ndelete SSOT + detach all agent symlinks`,
-      { confirmLabel: "remove", cancelLabel: "cancel" }
+      i18n.t("skillDetail.removeTitle"),
+      i18n.t("skillDetail.removeMsg", { name: props.skillName }),
+      { confirmLabel: i18n.t("btn.remove"), cancelLabel: i18n.t("btn.cancel") }
     )
     if (!ok) return
     try {
@@ -117,9 +120,9 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
       // skill 已删，不重开详情（dialog.clear 已由 ConfirmDialog commit 执行，这里保险再 clear）。
       dialog.clear()
     } catch (err) {
-      void ConfirmDialog.show(dialog, "Remove failed", errMsg(err), {
-        confirmLabel: "ok",
-        cancelLabel: "ok"
+      void ConfirmDialog.show(dialog, i18n.t("skillDetail.removeFailed"), errorMessage(err, i18n.locale()), {
+        confirmLabel: i18n.t("btn.ok"),
+        cancelLabel: i18n.t("btn.ok")
       })
     }
   }
@@ -130,15 +133,15 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
     if (opts.length === 0) {
       void ConfirmDialog.show(
         dialog,
-        "No rebind candidates",
-        `${props.skillName} has no source candidates`,
-        { confirmLabel: "ok", cancelLabel: "ok" }
+        i18n.t("skillDetail.noRebindTitle"),
+        i18n.t("skillDetail.noRebindMsg", { name: props.skillName }),
+        { confirmLabel: i18n.t("btn.ok"), cancelLabel: i18n.t("btn.ok") }
       )
       return
     }
     const sourceId = await SelectDialog.show(
       dialog,
-      "Rebind to source",
+      i18n.t("skillDetail.rebindSelectTitle"),
       opts.map((id) => ({ label: id, value: id }))
     )
     if (sourceId === undefined) return
@@ -151,9 +154,9 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
       await sync()
       reopen()
     } catch (err) {
-      void ConfirmDialog.show(dialog, "Rebind failed", errMsg(err), {
-        confirmLabel: "ok",
-        cancelLabel: "ok"
+      void ConfirmDialog.show(dialog, i18n.t("skillDetail.rebindFailed"), errorMessage(err, i18n.locale()), {
+        confirmLabel: i18n.t("btn.ok"),
+        cancelLabel: i18n.t("btn.ok")
       })
     }
   }
@@ -163,9 +166,9 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
     if (installed()) return
     const ok = await ConfirmDialog.show(
       dialog,
-      "Add skill to SSOT?",
-      `${props.skillName}\ncopy from source into SSOT`,
-      { confirmLabel: "add", cancelLabel: "cancel" }
+      i18n.t("skillDetail.addTitle"),
+      i18n.t("skillDetail.addMsg", { name: props.skillName }),
+      { confirmLabel: i18n.t("btn.add"), cancelLabel: i18n.t("btn.cancel") }
     )
     if (!ok) return
     try {
@@ -177,9 +180,9 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
       await sync()
       reopen()
     } catch (err) {
-      void ConfirmDialog.show(dialog, "Add failed", errMsg(err), {
-        confirmLabel: "ok",
-        cancelLabel: "ok"
+      void ConfirmDialog.show(dialog, i18n.t("skillDetail.addFailed"), errorMessage(err, i18n.locale()), {
+        confirmLabel: i18n.t("btn.ok"),
+        cancelLabel: i18n.t("btn.ok")
       })
     }
   }
@@ -193,17 +196,17 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
         <text fg={theme.textMuted}>esc</text>
       </box>
 
-      <Show when={skill()} fallback={<text fg={theme.danger}>Skill not found: {props.skillName}</text>}>
+      <Show when={skill()} fallback={<text fg={theme.danger}>{i18n.t("err.SKILL_NOT_FOUND", { name: props.skillName })}</text>}>
         <box flexDirection="column">
           <text fg={theme.textMuted}>
-            status: <span style={{ fg: theme.text }}>{skill()!.status}</span>
+            {i18n.t("detail.status")} <span style={{ fg: theme.text }}>{skill()!.status}</span>
           </text>
           <Show when={skill()!.description}>
             <text fg={theme.textMuted} wrapMode="none">
-              desc: {skill()!.description}
+              {i18n.t("detail.desc")} {skill()!.description}
             </text>
           </Show>
-          <text fg={theme.accent}>candidates:</text>
+          <text fg={theme.accent}>{i18n.t("detail.candidates")}</text>
           <For each={skill()!.candidates}>
             {(c) => (
               <box paddingLeft={1} flexDirection="column">
@@ -211,7 +214,7 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
                   - {c.sourceId} ({c.sourceType})
                 </text>
                 <text fg={theme.textMuted} wrapMode="none">
-                  {"  "}path: {c.path}
+                  {"  "}{i18n.t("detail.path")} {c.path}
                 </text>
               </box>
             )}
@@ -221,22 +224,22 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
 
       <Show when={installed()}>
         <box flexDirection="column">
-          <text fg={theme.accent}>installed:</text>
+          <text fg={theme.accent}>{i18n.t("detail.installed")}</text>
           <text fg={theme.textMuted} wrapMode="none">
-            ssot: {installed()!.ssotPath}
+            {i18n.t("detail.ssot")} {installed()!.ssotPath}
           </text>
           <text fg={theme.textMuted} wrapMode="none">
-            hash: {installed()!.contentHash.slice(0, 12)}
+            {i18n.t("detail.hash")} {installed()!.contentHash.slice(0, 12)}
           </text>
           <text fg={theme.textMuted}>
-            agents: {Object.keys(installed()!.enabledAgents).join(", ") || "(none)"}
+            {i18n.t("detail.agents")} {Object.keys(installed()!.enabledAgents).join(", ") || i18n.t("detail.noAgents")}
           </text>
         </box>
       </Show>
 
       <Show when={installations().length > 0}>
         <box flexDirection="column">
-          <text fg={theme.accent}>installations:</text>
+          <text fg={theme.accent}>{i18n.t("detail.installations")}</text>
           <For each={installations()}>
             {(inst) => (
               <text fg={theme.textMuted} wrapMode="none">
@@ -250,19 +253,15 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
       {/* 操作提示（installed 时 u/d/b；未 installed 时 +） */}
       <box flexDirection="row" gap={1}>
         <Show when={installed()}>
-          <text fg={theme.textMuted}>u update · d remove · b rebind ·</text>
+          <text fg={theme.textMuted}>{i18n.t("skillDetail.footerInstalled")}</text>
         </Show>
         <Show when={!installed()}>
-          <text fg={theme.textMuted}>+ add ·</text>
+          <text fg={theme.textMuted}>{i18n.t("skillDetail.footerAdd")}</text>
         </Show>
-        <text fg={theme.textMuted}>esc close</text>
+        <text fg={theme.textMuted}>{i18n.t("help.close")}</text>
       </box>
     </box>
   )
-}
-
-function errMsg(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
 }
 
 export namespace SkillDetailDialog {

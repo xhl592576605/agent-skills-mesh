@@ -76,3 +76,28 @@ Use the established helper behavior:
 - Do not turn doctor warnings into thrown exceptions; doctor is a diagnostic report.
 - Do not add HTTP-style response objects to core services; there is no backend API layer.
 - Do not catch all errors in the CLI unless a clear, tested user-facing error format is added.
+
+---
+
+## i18n Error Codes (Programmatic Branching Exception)
+
+The "no custom error hierarchies" rule has one documented exception: **i18n**. When the UI must translate a command-stopping failure by error type, it needs programmatic branching that existing typed statuses cannot provide (typed statuses cover expected domain states — `InstallAction` conflict, `DoctorCheck`, `InstallationRecord.status`; command-stopping `throw` failures have no status).
+
+Pattern (`src/core/errors.ts`):
+
+- `ErrorCode` — string union of business error codes, one per command-stopping `throw` failure that needs locale-aware translation. Source of truth is the `ErrorCode` union in `src/core/errors.ts`; dictionary keys `err.<CODE>` mirror it 1:1. Current codes, grouped by the service that throws them:
+  - install/repair (`install-service.ts`): `SKILL_NOT_FOUND`, `AGENT_NOT_FOUND`, `NO_INSTALLABLE_CANDIDATE`, `INSTALL_PLAN_CONFLICT`, `UNINSTALL_PLAN_CONFLICT`, `REPAIR_PLAN_CONFLICT`, `REPAIR_TARGET_MISSING`, `REPAIR_TARGET_NOT_SYMLINK`
+  - source-service: `SOURCE_PATH_NOT_EXIST`, `SOURCE_PATH_NOT_DIRECTORY`, `SOURCE_ALREADY_REGISTERED`, `SOURCE_NOT_SKILL_DIR`, `GIT_REPO_ALREADY_REGISTERED`, `REPO_TARGET_EXISTS`, `PURGE_REFUSED_NOT_UNDER_REPOS`, `SOURCE_ID_EXISTS`, `SOURCE_ID_UNKNOWN`
+  - skill-service: `SKILL_ALREADY_INSTALLED`, `SKILL_NOT_IN_INDEX`, `SKILL_NO_CANDIDATE`, `SKILL_MULTIPLE_CANDIDATES`, `SKILL_NOT_INSTALLED`, `SOURCE_NOT_PROVIDE_SKILL`, `CANDIDATE_NOT_CONFIGURED_SOURCE`
+  - agent-service: `AGENT_ID_INVALID`, `AGENT_ALREADY_EXISTS`, `AGENT_BUILTIN_NO_REMOVE` (`AGENT_NOT_FOUND` is reused from install/repair)
+  - ssot/config (`ssot-service.ts`, `config-store.ts`): `SOURCE_NOT_FOUND`, `COPIED_SKILL_INVALID`, `SSOT_TARGET_NOT_DIRECTORY`, `SSOT_TARGET_EXISTS`, `INVALID_TOML`, `CONFIG_NOT_FOUND`
+- `bizError(code, params, message?)` — returns a **plain `Error` instance** with附加 `code` / `params` properties. **Not a subclass** — stays within the "no hierarchy" rule字面 while enabling UI translation branching. `message` is the English fallback for logs / non-i18n contexts.
+- `isBizError(e)` — duck-type guard (`e instanceof Error && typeof e.code === "string"`).
+
+Contract:
+
+- Core throws `bizError(CODE, params, englishFallback)`. UI (`src/i18n/formatError`) translates `err.${code}` via the dictionary with `params` interpolation; non-biz errors get `err.systemPrefix` + the original message.
+- Dictionary keys `err.<CODE>` correspond 1:1 to `ErrorCode`. Adding a code requires updating both `en.ts` and `zh-CN.ts` (字典完整性 test enforces).
+- `src/i18n/` does **not** import `src/core/errors.ts` (duck-type detection), keeping the i18n module independently testable.
+
+Extend only when a command-stopping `throw` failure needs locale-aware translation. Expected domain problems continue using typed statuses, not error codes.

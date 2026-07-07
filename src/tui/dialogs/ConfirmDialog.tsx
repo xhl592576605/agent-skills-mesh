@@ -3,6 +3,7 @@ import { TextAttributes } from "@opentui/core"
 import { For, type ParentProps } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../context/theme.js"
+import { useI18n } from "../context/i18n.js"
 import { useDialog, type DialogContextValue } from "../context/dialog.js"
 
 /**
@@ -28,6 +29,7 @@ export interface ConfirmDialogProps {
 
 export function ConfirmDialog(props: ParentProps<ConfirmDialogProps>) {
   const theme = useTheme()
+  const i18n = useI18n()
   const dialog = useDialog()
   const [sel, setSel] = createStore<{ active: "confirm" | "cancel" }>({ active: "confirm" })
 
@@ -47,8 +49,8 @@ export function ConfirmDialog(props: ParentProps<ConfirmDialogProps>) {
 
   // 渲染顺序：cancel 在左、confirm 在右（与 opencode 一致，回车默认 confirm）。
   const optionList = () => [
-    { key: "cancel" as const, label: props.cancelLabel ?? "cancel" },
-    { key: "confirm" as const, label: props.confirmLabel ?? "confirm" }
+    { key: "cancel" as const, label: props.cancelLabel ?? i18n.t("btn.cancel") },
+    { key: "confirm" as const, label: props.confirmLabel ?? i18n.t("btn.confirm") }
   ]
 
   return (

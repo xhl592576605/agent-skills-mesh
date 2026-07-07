@@ -23,6 +23,7 @@ export interface AppConfig {
     install_strategy: "symlink";
     default_agent: string;
     auto_refresh_on_start: boolean;
+    language: "auto" | "zh-CN" | "en";
   };
   paths: {
     home: string;

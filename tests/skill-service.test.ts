@@ -8,6 +8,7 @@ import { StateStore } from "../src/core/storage/state-store.js";
 import { refreshIndex } from "../src/core/services/refresh-service.js";
 import { addSource, removeSource } from "../src/core/services/source-service.js";
 import { skillAdd, skillRebind, skillRemove, skillUpdate } from "../src/core/services/skill-service.js";
+import { isBizError } from "../src/core/errors.js";
 
 async function tempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -183,5 +184,67 @@ describe("skill-service rebind + remove (R5/R6)", () => {
 
   test("skillRemove rejects an unknown skill", async () => {
     await expect(skillRemove(configStore, stateStore, "nope")).rejects.toThrow(/not installed/i);
+  });
+});
+
+/** 捕获 promise 的 rejection，断言是 BizError 且 code 匹配（W1 错误码断言 helper）。 */
+async function expectBizCode(p: Promise<unknown>, code: string): Promise<void> {
+  const e = await p.catch((x: unknown) => x);
+  expect(isBizError(e)).toBe(true);
+  expect((e as { code?: unknown }).code).toBe(code);
+}
+
+describe("skill-service 业务错误码（W1）", () => {
+  let configStore: ConfigStore;
+  let indexStore: IndexStore;
+  let stateStore: StateStore;
+  beforeEach(async () => ({ configStore, indexStore, stateStore } = await setupHome()));
+
+  test("SKILL_ALREADY_INSTALLED: 重复 skillAdd", async () => {
+    const { index } = await addSkillSource(configStore, indexStore, stateStore, "foo");
+    await skillAdd(configStore, stateStore, index, "foo");
+    await expectBizCode(skillAdd(configStore, stateStore, index, "foo"), "SKILL_ALREADY_INSTALLED");
+  });
+
+  test("SKILL_NOT_IN_INDEX: skillAdd 索引中不存在的 skill", async () => {
+    const { index } = await addSkillSource(configStore, indexStore, stateStore, "foo");
+    await expectBizCode(skillAdd(configStore, stateStore, index, "missing"), "SKILL_NOT_IN_INDEX");
+  });
+
+  test("SKILL_MULTIPLE_CANDIDATES: 同名 skill 来自多 source", async () => {
+    const dirA = await tempDir("asm-mc-a-");
+    const dirB = await tempDir("asm-mc-b-");
+    await writeSkill(path.join(dirA, "foo"), "foo");
+    await writeSkill(path.join(dirB, "foo"), "foo");
+    await addSource(configStore, stateStore, dirA);
+    await addSource(configStore, stateStore, dirB);
+    const index = await refreshIndex(await configStore.read(), await stateStore.read());
+    await expectBizCode(skillAdd(configStore, stateStore, index, "foo"), "SKILL_MULTIPLE_CANDIDATES");
+  });
+
+  test("SOURCE_NOT_PROVIDE_SKILL: skillRebind 到不提供该 skill 的 source", async () => {
+    const fooDir = await tempDir("asm-rbc-foo-");
+    const barDir = await tempDir("asm-rbc-bar-");
+    await writeSkill(path.join(fooDir, "foo"), "foo");
+    await writeSkill(path.join(barDir, "bar"), "bar");
+    const fooResult = await addSource(configStore, stateStore, fooDir);
+    const barResult = await addSource(configStore, stateStore, barDir);
+    const index = await refreshIndex(await configStore.read(), await stateStore.read());
+    await skillAdd(configStore, stateStore, index, "foo");
+    await expectBizCode(skillRebind(configStore, stateStore, index, "foo", barResult.source.id), "SOURCE_NOT_PROVIDE_SKILL");
+    void fooResult;
+  });
+
+  test("SKILL_NOT_INSTALLED: skillRemove / skillRebind 未安装 skill", async () => {
+    const { index } = await addSkillSource(configStore, indexStore, stateStore, "foo");
+    await expectBizCode(skillRemove(configStore, stateStore, "nope"), "SKILL_NOT_INSTALLED");
+    await expectBizCode(skillRebind(configStore, stateStore, index, "nope", "any"), "SKILL_NOT_INSTALLED");
+  });
+
+  test("SOURCE_ID_UNKNOWN: skillAdd / skillRebind 未知 source id", async () => {
+    const { index } = await addSkillSource(configStore, indexStore, stateStore, "foo");
+    await expectBizCode(skillAdd(configStore, stateStore, index, "foo", { source: "nope" }), "SOURCE_ID_UNKNOWN");
+    await skillAdd(configStore, stateStore, index, "foo");
+    await expectBizCode(skillRebind(configStore, stateStore, index, "foo", "nope"), "SOURCE_ID_UNKNOWN");
   });
 });

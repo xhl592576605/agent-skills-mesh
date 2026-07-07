@@ -66,3 +66,50 @@ describe("storage init", () => {
     await expect(stateStore.read()).resolves.toEqual(state);
   });
 });
+
+describe("config.language field", () => {
+  test("createDefaultConfig sets language to auto and serializes it", async () => {
+    const home = await tempDir();
+    const configStore = new ConfigStore(home);
+    const config = await configStore.init();
+    expect(config.settings.language).toBe("auto");
+    // 序列化后文件含 language 行
+    const raw = await fs.readFile(configStore.configPath, "utf8");
+    expect(raw).toContain('language = "auto"');
+  });
+
+  test("round-trips language zh-CN / en", async () => {
+    const home = await tempDir();
+    const configStore = new ConfigStore(home);
+    const config = await configStore.init();
+    config.settings.language = "zh-CN";
+    await configStore.write(config);
+    const reread = await configStore.read();
+    expect(reread.settings.language).toBe("zh-CN");
+  });
+
+  test("legacy config without language line defaults to auto", async () => {
+    const home = await tempDir();
+    const configStore = new ConfigStore(home);
+    // 模拟旧 config：settings 段无 language 行
+    const legacy = [
+      "version = 1",
+      "",
+      "[settings]",
+      'install_strategy = "symlink"',
+      'default_agent = "pi"',
+      "auto_refresh_on_start = true",
+      "",
+      "[paths]",
+      'home = "~/.agent-skills-mesh"',
+      'repos = "~/.agent-skills-mesh/repos"',
+      'local = "~/.agent-skills-mesh/local"',
+      'cache = "~/.agent-skills-mesh/cache"',
+      'skills = "~/.agent-skills-mesh/skills"',
+      ""
+    ].join("\n");
+    await fs.writeFile(configStore.configPath, legacy, "utf8");
+    const config = await configStore.read();
+    expect(config.settings.language).toBe("auto");
+  });
+});

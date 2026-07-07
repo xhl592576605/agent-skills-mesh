@@ -50,9 +50,9 @@ describe("asm skill search (CLI format + filtering)", () => {
     await indexStore.write(index);
 
     // 未 installed 的 configured-source 候选归 discovered（"可纳管"）。
-    // R2：formatSkillRows 现输出「表头 + 分隔线 + 固定列宽行」。
-    const reactRows = formatSkillRows(searchSkills(index, "react"));
-    expect(reactRows[0]).toMatch(/^NAME\s/); // 表头
+    // R2：formatSkillRows 现输出「表头 + 分隔线 + 固定列宽行」（表头走 i18n 字典）。
+    const reactRows = formatSkillRows(searchSkills(index, "react"), "en");
+    expect(reactRows[0]).toMatch(/^NAME\s/); // 英文表头
     expect(reactRows[1]).toMatch(/^─+$/); // 分隔线
     const reactCore = reactRows.find((row) => row.startsWith("react-core"));
     const reactHelper = reactRows.find((row) => row.startsWith("react-helper"));
@@ -64,9 +64,26 @@ describe("asm skill search (CLI format + filtering)", () => {
     expect(reactHelper!).toContain("UI components");
 
     // 空关键字返回全部，按 name 排序（跳过表头 + 分隔线）。
-    const allRows = formatSkillRows(searchSkills(index, ""));
+    const allRows = formatSkillRows(searchSkills(index, ""), "en");
     const dataRows = allRows.slice(2);
     expect(dataRows.map((row) => row.split(/\s+/)[0])).toEqual(["backend-tools", "react-core", "react-helper"]);
+  });
+
+  test("中文表头在固定 widths 下稳定对齐（中文更窄不溢出）", async () => {
+    const { store, indexStore, stateStore } = await setupHome();
+    const dir = path.join(await tempDir("asm-s-zh-"), "zh-skill");
+    await writeSkill(dir, "zh-skill", "测试技能");
+    await addSource(store, stateStore, path.dirname(dir));
+    const index = await refreshIndex(await store.read(), await stateStore.read());
+    await indexStore.write(index);
+
+    const zhRows = formatSkillRows(searchSkills(index, "zh"), "zh-CN");
+    expect(zhRows[0]).toMatch(/^名称\s/); // 中文表头
+    expect(zhRows[1]).toMatch(/^─+$/); // 分隔线宽度与英文一致（widths 固定）
+    // 中英文分隔线宽度相同（均来自固定 widths [24,11,18,48] 之和），证明列宽不随语言漂移。
+    const enRows = formatSkillRows(searchSkills(index, "zh"), "en");
+    expect(zhRows[1]).toBe(enRows[1]);
+    expect(zhRows[1].length).toBe(enRows[1].length);
   });
 });
 

@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "TUI 质量门禁：core-zero-change 约束（本任务 core 改动须独立 phase）；测试两 tier（纯函数 node + 渲染 Bun-only describe.skipIf）；mock 键位陷阱（pressEscape/shift 检测）；颜色无关性"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "core 质量门禁：storage/symlink 安全契约；错误码改造不破坏 plan/apply 安全规则；测试用 temp dir/ASM_HOME 不碰真实目录"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "校验错误码方案符合 spec：未引入 Error 子类、保留 typed statuses 优先、ENOENT 处理不变；确认 Phase F 已文档化"}
+{"file": ".trellis/spec/frontend/solid-patterns.md", "reason": "校验响应式正确性：t() 在 reactive 上下文、useI18n Owner Context 合规、无 effect 内写依赖 signal 的死循环；shift+l 键位检测正确"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "校验 TKey 类型安全与字典完整性（en/zh key 集合一致断言）；无 any 滥用"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "校验跨层一致性：config.language 读写链路、错误码从 core 到 UI 翻译无丢失、无层间重复 cast"}

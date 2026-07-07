@@ -15,14 +15,14 @@ import type { KeyEvent } from "@opentui/core"
 /** 构造最小 KeyEvent mock（handler 只读 name/sequence/ctrl）。 */
 function key(
   name: string,
-  opts: { sequence?: string; ctrl?: boolean; meta?: boolean } = {}
+  opts: { sequence?: string; ctrl?: boolean; meta?: boolean; shift?: boolean } = {}
 ): KeyEvent {
   return {
     name,
     sequence: opts.sequence ?? name,
     ctrl: opts.ctrl ?? false,
     meta: opts.meta ?? false,
-    shift: false
+    shift: opts.shift ?? false
   } as unknown as KeyEvent
 }
 
@@ -36,6 +36,7 @@ function makeDeps(overrides: Partial<AppShellKeyDeps> = {}): AppShellKeyDeps {
     refresh: vi.fn(),
     showHelp: vi.fn(),
     exit: vi.fn(),
+    toggleLang: vi.fn(),
     ...overrides
   }
 }
@@ -226,5 +227,39 @@ describe("createAppShellKeyHandler — 优先级顺序", () => {
     createAppShellKeyHandler(deps)(key("escape"))
     expect(deps.exit).not.toHaveBeenCalled()
     expect(viewHandler).toHaveBeenCalledOnce()
+  })
+})
+
+describe("createAppShellKeyHandler — shift+L 语言热切换", () => {
+  it("shift+l → toggleLang（key.name 恒小写，大写看 key.shift）", () => {
+    const deps = makeDeps()
+    createAppShellKeyHandler(deps)(key("l", { shift: true }))
+    expect(deps.toggleLang).toHaveBeenCalledOnce()
+  })
+
+  it("普通 l（无 shift）→ 不触发 toggleLang（fallthrough 给 view 的 matrix 右移）", () => {
+    const deps = makeDeps()
+    createAppShellKeyHandler(deps)(key("l"))
+    expect(deps.toggleLang).not.toHaveBeenCalled()
+  })
+
+  it("shift+l 优先于 view handler：view 不被调用（不被搜索态/matrix 右移拦截）", () => {
+    const viewHandler = vi.fn(() => true)
+    const deps = makeDeps({ getViewHandler: () => viewHandler })
+    createAppShellKeyHandler(deps)(key("l", { shift: true }))
+    expect(deps.toggleLang).toHaveBeenCalledOnce()
+    expect(viewHandler).not.toHaveBeenCalled()
+  })
+
+  it("弹窗打开时 shift+l → 不触发 toggleLang（被弹窗吞，关闭弹窗后再切）", () => {
+    const deps = makeDeps({ isOpen: () => true })
+    createAppShellKeyHandler(deps)(key("l", { shift: true }))
+    expect(deps.toggleLang).not.toHaveBeenCalled()
+  })
+
+  it("shift+其他字母不触发 toggleLang（仅 shift+l）", () => {
+    const deps = makeDeps()
+    createAppShellKeyHandler(deps)(key("a", { shift: true }))
+    expect(deps.toggleLang).not.toHaveBeenCalled()
   })
 })

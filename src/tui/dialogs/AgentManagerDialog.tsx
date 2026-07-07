@@ -2,8 +2,10 @@ import { useKeyboard } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { For, createSignal, type ParentProps } from "solid-js"
 import { useTheme } from "../context/theme.js"
+import { useI18n } from "../context/i18n.js"
 import { useData } from "../context/data.js"
 import { useDialog, type DialogContextValue } from "../context/dialog.js"
+import { errorMessage } from "../../i18n/index.js"
 import { ConfigStore, isBuiltinAgent } from "../../core/storage/config-store.js"
 import { StateStore } from "../../core/storage/state-store.js"
 import { addAgent, listAgents, removeAgent, setAgentEnabled, type AgentRow } from "../../core/services/agent-service.js"
@@ -20,6 +22,7 @@ import { ConfirmDialog } from "./ConfirmDialog.js"
  */
 export function AgentManagerDialog(props: ParentProps) {
   const theme = useTheme()
+  const i18n = useI18n()
   const data = useData()
   const dialog = useDialog()
   const [agents, setAgents] = createSignal<AgentRow[]>([])
@@ -50,14 +53,14 @@ export function AgentManagerDialog(props: ParentProps) {
       await setAgentEnabled(configStore, a.id, !a.enabled)
       await data.reload()
       await reload()
-      setMessage(`${a.id} ${!a.enabled ? "enabled" : "disabled"}`)
+      setMessage(i18n.t(!a.enabled ? "agentManager.enabled" : "agentManager.disabled", { id: a.id }))
     } catch (err) {
-      setMessage(`toggle failed: ${err instanceof Error ? err.message : String(err)}`)
+      setMessage(i18n.t("agentManager.toggleFail", { message: errorMessage(err, i18n.locale()) }))
     }
   }
 
   async function addFlow(): Promise<void> {
-    const input = await AddAgentDialog.show(dialog)
+    const input = await AddAgentDialog.show(dialog, i18n.locale())
     if (!input) return
     try {
       const configStore = new ConfigStore()
@@ -65,7 +68,7 @@ export function AgentManagerDialog(props: ParentProps) {
       await data.reload()
       AgentManagerDialog.show(dialog)  // 重开 manager：新增后刷新列表（旧实例随 AddAgentDialog 卸载）
     } catch (err) {
-      setMessage(`add failed: ${err instanceof Error ? err.message : String(err)}`)
+      setMessage(i18n.t("agentManager.addFail", { message: errorMessage(err, i18n.locale()) }))
     }
   }
 
@@ -73,14 +76,14 @@ export function AgentManagerDialog(props: ParentProps) {
     const a = agents()[sel()]
     if (!a) return
     if (isBuiltinAgent(a.id)) {
-      setMessage(`${a.id} is builtin, cannot remove (use space to disable)`)
+      setMessage(i18n.t("agentManager.builtinCannotRemove", { id: a.id }))
       return
     }
     const ok = await ConfirmDialog.show(
       dialog,
-      `Remove agent ${a.id}?`,
-      `detach ASM-managed symlinks under ${a.skills_dir} + delete config`,
-      { confirmLabel: "remove", cancelLabel: "cancel" }
+      i18n.t("agentManager.removeTitle", { id: a.id }),
+      i18n.t("agentManager.removeMsg", { dir: a.skills_dir }),
+      { confirmLabel: i18n.t("btn.remove"), cancelLabel: i18n.t("btn.cancel") }
     )
     if (!ok) return
     try {
@@ -90,7 +93,7 @@ export function AgentManagerDialog(props: ParentProps) {
       await data.reload()
       AgentManagerDialog.show(dialog)  // 重开 manager：删除生效后刷新列表
     } catch (err) {
-      setMessage(`remove failed: ${err instanceof Error ? err.message : String(err)}`)
+      setMessage(i18n.t("agentManager.removeFail", { message: errorMessage(err, i18n.locale()) }))
     }
   }
 
@@ -122,7 +125,7 @@ export function AgentManagerDialog(props: ParentProps) {
     <box flexDirection="column" gap={1}>
       <box flexDirection="row" justifyContent="space-between">
         <text fg={theme.text} attributes={TextAttributes.BOLD}>
-          Agents
+          {i18n.t("agentManager.title")}
         </text>
         <text fg={theme.textMuted}>esc</text>
       </box>
@@ -136,14 +139,14 @@ export function AgentManagerDialog(props: ParentProps) {
               backgroundColor={i() === sel() ? theme.primary : undefined}
             >
               <text fg={i() === sel() ? theme.backgroundPanel : theme.text}>
-                {i() === sel() ? "❯" : " "} {a.enabled ? "[✓]" : "[ ]"} {a.id}{isBuiltinAgent(a.id) ? "" : " · custom"} ({a.installed ? "installed" : "missing"})
+                {i() === sel() ? "❯" : " "} {a.enabled ? "[✓]" : "[ ]"} {a.id}{isBuiltinAgent(a.id) ? "" : i18n.t("common.customSuffix")} ({a.installed ? i18n.t("status.installed") : i18n.t("status.missing")})
               </text>
             </box>
           )}
         </For>
       </box>
       <text fg={message() ? theme.warning : theme.textMuted}>
-        {message() || "space toggle · a add · d remove · esc close"}
+        {message() || i18n.t("agentManager.footer")}
       </text>
     </box>
   )

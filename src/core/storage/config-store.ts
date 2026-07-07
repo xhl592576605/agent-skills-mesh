@@ -3,11 +3,12 @@ import path from "node:path";
 import type { AgentConfig, AppConfig, SourceConfig, SourceType } from "../models/config.js";
 import { atomicWriteFile, ensureDir, pathExists } from "../../utils/fs.js";
 import { getAsmHome, resolveConfiguredPath } from "../../utils/path.js";
+import { bizError } from "../errors.js";
 
 export function createDefaultConfig(): AppConfig {
   return {
     version: 1,
-    settings: { install_strategy: "symlink", default_agent: "pi", auto_refresh_on_start: true },
+    settings: { install_strategy: "symlink", default_agent: "pi", auto_refresh_on_start: true, language: "auto" },
     paths: {
       home: "~/.agent-skills-mesh",
       repos: "~/.agent-skills-mesh/repos",
@@ -99,6 +100,7 @@ export function serializeConfig(config: AppConfig): string {
     `install_strategy = ${quote(config.settings.install_strategy)}`,
     `default_agent = ${quote(config.settings.default_agent)}`,
     `auto_refresh_on_start = ${config.settings.auto_refresh_on_start}`,
+    `language = ${quote(config.settings.language)}`,
     "",
     "[paths]",
     `home = ${quote(config.paths.home)}`,
@@ -167,7 +169,7 @@ function parseConfig(content: string): AppConfig {
 
 function splitAssignment(line: string): [string, string] {
   const index = line.indexOf("=");
-  if (index === -1) throw new Error(`Invalid TOML assignment: ${line}`);
+  if (index === -1) throw bizError("INVALID_TOML", { line }, `Invalid TOML assignment: ${line}`);
   return [line.slice(0, index).trim(), line.slice(index + 1).trim()];
 }
 

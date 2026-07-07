@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import { TextAttributes } from "@opentui/core"
 import { For, Show, createSignal, type ParentProps } from "solid-js"
 import { useTheme } from "../context/theme.js"
+import { useI18n } from "../context/i18n.js"
 import { useDialog, type DialogContextValue } from "../context/dialog.js"
 
 /**
@@ -21,6 +22,7 @@ export interface SkillMdDialogProps {
 
 export function SkillMdDialog(props: ParentProps<SkillMdDialogProps>) {
   const theme = useTheme()
+  const i18n = useI18n()
   const dialog = useDialog()
   const [content, setContent] = createSignal<string | undefined>(undefined)
   const [error, setError] = createSignal<string | undefined>(undefined)
@@ -41,8 +43,8 @@ export function SkillMdDialog(props: ParentProps<SkillMdDialogProps>) {
         </text>
         <text fg={theme.textMuted}>esc</text>
       </box>
-      <Show when={!error()} fallback={<text fg={theme.danger}>Failed to read SKILL.md: {error()}</text>}>
-        <Show when={content()} fallback={<text fg={theme.textMuted}>Loading...</text>}>
+      <Show when={!error()} fallback={<text fg={theme.danger}>{i18n.t("skillMd.readFail", { message: error() ?? "" })}</text>}>
+        <Show when={content()} fallback={<text fg={theme.textMuted}>{i18n.t("common.loading")}</text>}>
           <scrollbox height={20}>
             <For each={content()!.split("\n")}>
               {(line) => <text fg={theme.text} wrapMode="none">{line || " "}</text>}
@@ -50,7 +52,7 @@ export function SkillMdDialog(props: ParentProps<SkillMdDialogProps>) {
           </scrollbox>
         </Show>
       </Show>
-      <text fg={theme.textMuted}>↑↓ scroll · esc close</text>
+      <text fg={theme.textMuted}>{i18n.t("skillMd.footer")}</text>
     </box>
   )
 }

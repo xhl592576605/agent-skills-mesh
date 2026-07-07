@@ -3,6 +3,7 @@ import { PasteEvent, TextAttributes } from "@opentui/core"
 import type { ParentProps } from "solid-js"
 import { createSignal } from "solid-js"
 import { useTheme } from "../context/theme.js"
+import { useI18n } from "../context/i18n.js"
 import { useDialog, type DialogContextValue } from "../context/dialog.js"
 
 /**
@@ -33,6 +34,7 @@ export interface PromptDialogProps {
 
 export function PromptDialog(props: ParentProps<PromptDialogProps>) {
   const theme = useTheme()
+  const i18n = useI18n()
   const dialog = useDialog()
   const [value, setValue] = createSignal(props.defaultValue ?? "")
 
@@ -81,7 +83,7 @@ export function PromptDialog(props: ParentProps<PromptDialogProps>) {
         </text>
       </box>
       <box flexDirection="row" gap={1}>
-        <text fg={theme.textMuted}>return confirm · backspace delete · esc cancel</text>
+        <text fg={theme.textMuted}>{i18n.t("prompt.footer")}</text>
       </box>
     </box>
   )

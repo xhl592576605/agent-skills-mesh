@@ -1,4 +1,5 @@
 import type { Theme } from "../theme/index.js"
+import { type TranslateFn } from "../context/i18n.js"
 
 /**
  * 搜索栏（design §6 `/` 触发）。
@@ -10,6 +11,7 @@ export interface SearchBarProps {
   query: string
   active: boolean
   theme: Theme
+  t: TranslateFn
 }
 
 export function SearchBar(props: SearchBarProps) {
@@ -22,9 +24,9 @@ export function SearchBar(props: SearchBarProps) {
       paddingLeft={1}
       height={3}
     >
-      <text fg={theme.textMuted}>search: </text>
+      <text fg={theme.textMuted}>{props.t("search.label")}</text>
       <text fg={props.active ? theme.text : theme.textMuted}>
-        {props.query || (props.active ? "" : "(press / to filter skills)")}
+        {props.query || (props.active ? "" : props.t("search.placeholder"))}
       </text>
       <text fg={theme.primary}>{props.active ? "▏" : ""}</text>
     </box>
