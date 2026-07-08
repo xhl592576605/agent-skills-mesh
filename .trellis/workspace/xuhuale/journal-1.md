@@ -385,3 +385,36 @@ Implemented strict ASM private SSOT skill installs with state.json, SSOT symlink
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: TUI 样式重设计：DataTable 封装 + 蒙层 CJK bug 修复 + 键位调整
+
+**Date**: 2026-07-09
+**Task**: TUI 样式重设计：DataTable 封装 + 蒙层 CJK bug 修复 + 键位调整
+**Branch**: `main`
+
+### Summary
+
+封装通用 DataTable 组件统一三视图表格（根治列错位）；修复 DataTable 响应式（createMemo 包裹 col.render，空格切换/光标高亮正常）；Dialog 蒙层因 OpenTUI 0.4.x CJK alpha bug 改无蒙层+borderStrong 边框；PromptDialog 光标对齐 SearchBar 修复首字符不可见；键位新增 Tab 循环切 tab、m→A(shift+a) 管理智能体、skill hints 加 i 详情；tab 改名/去标题/表头加粗/弹窗加大；补 cycleTab 测试。typecheck+400 tests 全绿，core-zero-change。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1edb57b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
