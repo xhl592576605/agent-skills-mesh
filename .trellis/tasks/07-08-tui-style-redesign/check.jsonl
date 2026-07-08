@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"检查新增/改造组件是否使用 theme token、OpenTUI 原语并保持 props 边界清晰"}
+{"file":".trellis/spec/frontend/solid-patterns.md","reason":"检查未新增 useKeyboard 多订阅、未在回调中创建丢失 owner 的 context JSX"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"检查样式改造未改变 pending→confirm→apply→reload/refresh 数据流"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"检查 typecheck/test、core-zero-change、颜色非唯一信息载体等质量要求"}

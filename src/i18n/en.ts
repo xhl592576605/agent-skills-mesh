@@ -61,6 +61,11 @@ export const dict = {
   "common.name": "Name",
   "common.esc": "esc",
 
+  "header.total": "items",
+  "header.errors": "errors",
+  "header.warnings": "warnings",
+  "header.ok": "ok",
+
   // 状态值（表格 STATUS 列、单元格、agent 列表等）
   "status.ok": "ok",
   "status.failed": "failed",
@@ -86,17 +91,18 @@ export const dict = {
   "btn.ok": "ok",
 
   // === TUI Tab 标签（App.tsx TABS，含数字前缀）===
-  "tab.skill": "1 Skill×Agent",
+  "tab.skill": "1 Skill",
   "tab.source": "2 Source",
   "tab.doctor": "3 Doctor",
 
   // === TUI StatusBar hints（App.tsx TAB_HINTS；跨 tab 复用 help/refresh/tabs/moveV）===
-  "hint.move": "↑↓←→ move",
+  "hint.move": "↑↓ move",
   "hint.toggle": "space toggle",
   "hint.rowOn": "a row-on",
   "hint.delete": "d delete",
   "hint.review": "enter review",
-  "hint.agents": "m agents",
+  "hint.agents": "A agents",
+  "hint.info": "i info",
   "hint.search": "/ search",
   "hint.moveV": "↑↓ move",
   "hint.add": "a add",
@@ -117,7 +123,7 @@ export const dict = {
   "help.globalLine": "1/2/3 tabs · ctrl+r refresh · L lang · ? help · esc/ctrl+c exit",
   "help.skillSection": "skill×agent",
   "help.skillLine":
-    "↑↓←→/hjkl move · space toggle · a row-on · d delete · enter review · i info · m agents (space toggle · a add) · / search",
+    "↑↓←→/hjkl move · space toggle · a row-on · d delete · enter review · i info · A agents (space toggle · a add) · / search",
   "help.sourceSection": "source",
   "help.sourceLine": "a add · u update · d remove · e/x enable/disable · enter detail",
   "help.doctorSection": "doctor",
@@ -284,7 +290,7 @@ export const dict = {
   "skillView.summaryRow": "{{skill}}: {{parts}}",
   "skillView.appliedPartial": "applied {{ok}}, {{failed}} failed (kept for retry)",
   "skillView.appliedOk": "applied {{count}} ok",
-  "skillView.pressReview": "press r to review {{count}} pending",
+  "skillView.pressReview": "press enter to review {{count}} pending",
   "skillView.skillCount": "{{count}} skill(s)",
   "skillView.someConflicts": "some changes had conflicts — see `asm doctor` or retry",
   "skillView.conflictFallback": "conflict",
@@ -293,7 +299,7 @@ export const dict = {
   "sourceView.headerId": "id",
   "sourceView.headerType": "type",
   "sourceView.headerEnabled": "enabled",
-  "sourceView.headerPathMeta": "path / meta",
+  "sourceView.headerPathMeta": "path",
   "sourceView.noSource": "no source selected",
   "sourceView.noSources": "No sources. Press `a` to add one.",
   "sourceView.sourceCount": "{{count}} source(s)",
@@ -325,13 +331,16 @@ export const dict = {
   "sourceView.failedSuffix": " · failed: {{list}}",
   "sourceView.noSourcesUpdated": "no sources updated",
   "sourceView.reportLine": "{{sourceId}}: {{detail}}",
+  "sourceView.sourceId": "source ID",
+  "sourceView.repoUrl": "repo URL",
+  "sourceView.defaultBranch": "default branch",
 
   // === TUI DoctorView（tab 3）===
   "doctorView.headerState": "state",
   "doctorView.headerKind": "kind",
   "doctorView.headerMsg": "message · fix",
   "doctorView.running": "Running doctor...",
-  "doctorView.fixable": "  [fixable]",
+  "doctorView.fixable": "[fixable]",
   "doctorView.noFix": "{{kind}}: no auto-fix (manual action needed)",
   "doctorView.fixTitle": "Fix {{kind}}?",
   "doctorView.fixOk": "fixed: {{kind}}",
@@ -347,6 +356,9 @@ export const dict = {
   "doctorView.snapshotNotLoaded": "snapshot not loaded",
   "doctorView.repairConflict": "repair conflict: {{warnings}}",
   "doctorView.unsupportedFix": "unsupported fix type: {{type}}",
+  "doctorView.noAutoFix": "no fix needed / no auto-fix",
+  "doctorView.checkItem": "check",
+  "doctorView.fixLabel": "fix",
 
   // === doctor 状态文本标签（DoctorView statusLabel，与表格 status 区分）===
   "doctor.statusOk": "ok",

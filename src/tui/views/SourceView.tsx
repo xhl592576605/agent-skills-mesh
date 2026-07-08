@@ -1,5 +1,6 @@
 import { useTerminalDimensions } from "@opentui/solid"
-import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js"
+import { Show, createEffect, createSignal, onCleanup, onMount } from "solid-js"
+import { TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme.js"
 import { useI18n, type TranslateFn } from "../context/i18n.js"
 import { useData } from "../context/data.js"
@@ -30,6 +31,8 @@ import {
   createSourceKeyHandler,
   type SourceKeyDeps
 } from "../state/source-keys.js"
+import { Panel } from "../components/Panel.js"
+import { DataTable, type Column } from "../components/DataTable.js"
 
 // re-export 供测试使用，保持「view 导出 key handler 契约」（design §6）。
 export { createSourceKeyHandler, type SourceKeyDeps } from "../state/source-keys.js"
@@ -241,85 +244,69 @@ export function SourceView() {
   }
 
   const statusLine = () => message() || i18n.t("sourceView.sourceCount", { count: sources().length })
+  // path 列宽度：总宽(panel 内) - prefix(5) - 前三列(30+22+20) - path 分隔线(2)。
+  const pathWidth = () => Math.max(20, dim().width - 81)
+  const sourceColumns = (): Column<SourceConfig>[] => [
+    { key: "id", header: i18n.t("sourceView.headerId"), width: 28, render: (src, ctx) => ({ text: src.id, fg: ctx.isCursorRow ? theme.text : theme.text }) },
+    { key: "type", header: i18n.t("sourceView.headerType"), width: 20, render: (src) => ({ text: `⌘ ${src.type}`, fg: theme.textMuted }) },
+    {
+      key: "enabled",
+      header: i18n.t("sourceView.headerEnabled"),
+      width: 18,
+      render: (src) => ({
+        text: `● ${src.enabled ? i18n.t("status.enabled") : i18n.t("status.disabled")}`,
+        fg: src.enabled ? theme.success : theme.warning
+      })
+    },
+    { key: "path", header: i18n.t("sourceView.headerPathMeta"), width: pathWidth(), render: (src) => ({ text: src.path, fg: theme.primary }) }
+  ]
 
   return (
-    <box flexDirection="column" flexGrow={1} width={dim().width}>
-      {/* 表头 */}
-      <box flexDirection="row" backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1}>
-        <text width={16} fg={theme.textMuted}>{i18n.t("sourceView.headerId")}</text>
-        <text width={13} fg={theme.textMuted}>{i18n.t("sourceView.headerType")}</text>
-        <text width={9} fg={theme.textMuted}>{i18n.t("sourceView.headerEnabled")}</text>
-        <text fg={theme.textMuted}>{i18n.t("sourceView.headerPathMeta")}</text>
-      </box>
-      <box flexGrow={1} flexDirection="column">
+    <box flexDirection="column" flexGrow={1} width={Math.max(1, dim().width - 2)} gap={1}>
+      <Show
+        when={!data.snapshot.loading}
+        fallback={<Panel theme={theme} flexGrow={1}><box paddingLeft={1}><text fg={theme.textMuted}>{i18n.t("common.loading")}</text></box></Panel>}
+      >
         <Show
-          when={!data.snapshot.loading}
-          fallback={<text fg={theme.textMuted}>{i18n.t("common.loading")}</text>}
+          when={!data.snapshot.error}
+          fallback={<Panel theme={theme} flexGrow={1}><box paddingLeft={1}><text fg={theme.danger}>{i18n.t("common.errorLine", { message: data.snapshot.error?.message ?? "" })}</text></box></Panel>}
         >
-          <Show
-            when={!data.snapshot.error}
-            fallback={<text fg={theme.danger}>{i18n.t("common.errorLine", { message: data.snapshot.error?.message ?? "" })}</text>}
-          >
-            <Show
-              when={sources().length > 0}
-              fallback={
-                <box paddingLeft={1}>
-                  <text fg={theme.textMuted}>{i18n.t("sourceView.noSources")}</text>
-                </box>
-              }
-            >
-              <For each={sources()}>
-                {(src, i) => (
-                  <box
-                    flexDirection="row"
-                    paddingLeft={1}
-                    paddingRight={1}
-                    backgroundColor={i() === cursor() ? theme.primary : undefined}
-                  >
-                    <text
-                      width={16}
-                      fg={i() === cursor() ? theme.backgroundPanel : theme.text}
-                      wrapMode="none"
-                    >
-                      {src.id}
-                    </text>
-                    <text
-                      width={13}
-                      fg={i() === cursor() ? theme.backgroundPanel : theme.textMuted}
-                    >
-                      {src.type}
-                    </text>
-                    <text
-                      width={9}
-                      fg={
-                        i() === cursor()
-                          ? theme.backgroundPanel
-                          : src.enabled
-                            ? theme.success
-                            : theme.warning
-                      }
-                    >
-                      {src.enabled ? i18n.t("status.enabled") : i18n.t("status.disabled")}
-                    </text>
-                    <text
-                      fg={i() === cursor() ? theme.backgroundPanel : theme.textMuted}
-                      wrapMode="none"
-                    >
-                      {src.path}
-                      {src.url ? `  url=${src.url}` : ""}
-                      {src.branch ? `  branch=${src.branch}` : ""}
-                    </text>
-                  </box>
-                )}
-              </For>
-            </Show>
-          </Show>
+          <DataTable
+            theme={theme}
+            columns={sourceColumns()}
+            rows={sources()}
+            cursor={cursor()}
+            rowHeight={1}
+            flexGrow={1}
+            fallback={<box paddingLeft={1}><text fg={theme.textMuted}>{i18n.t("sourceView.noSources")}</text></box>}
+          />
         </Show>
-      </box>
-      {/* 状态/提示行 */}
-      <box height={1} backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1}>
-        <text fg={message() ? theme.warning : theme.textMuted}>{statusLine()}</text>
-      </box>
+      </Show>
+      <Panel theme={theme} height={8} paddingLeft={1} paddingRight={1}>
+        <Show when={selected()} fallback={<text fg={theme.textMuted}>{i18n.t("sourceView.noSource")}</text>}>
+          {(src: () => SourceConfig) => (
+            <box flexDirection="row" gap={2} alignItems="center" flexGrow={1}>
+              <box width={5} height={3} border={true} borderColor={theme.border} backgroundColor={theme.panelMuted} flexDirection="column" alignItems="center" justifyContent="center">
+                <text fg={theme.cyan} attributes={TextAttributes.BOLD}>i</text>
+              </box>
+              <box flexDirection="column" flexGrow={1}>
+                <text fg={theme.text} attributes={TextAttributes.BOLD}>{src().id}</text>
+                <box flexDirection="row"><text width={12} fg={theme.textMuted}>{i18n.t("sourceView.sourceId")}</text><text fg={theme.primary}>{src().id}</text></box>
+                <box flexDirection="row"><text width={12} fg={theme.textMuted}>{i18n.t("table.type")}</text><text fg={theme.primary}>{src().type}</text></box>
+                <box flexDirection="row"><text width={12} fg={theme.textMuted}>{i18n.t("table.enabled")}</text><text fg={src().enabled ? theme.success : theme.warning}>{src().enabled ? i18n.t("status.enabled") : i18n.t("status.disabled")}</text></box>
+                <box flexDirection="row"><text width={12} fg={theme.textMuted}>{i18n.t("table.path")}</text><text fg={theme.primary} wrapMode="none">{src().path}</text></box>
+                <Show when={src().url}><box flexDirection="row"><text width={12} fg={theme.textMuted}>{i18n.t("sourceView.repoUrl")}</text><text fg={theme.primary} wrapMode="none">{src().url}</text></box></Show>
+                <Show when={src().branch}><box flexDirection="row"><text width={12} fg={theme.textMuted}>{i18n.t("sourceView.defaultBranch")}</text><text fg={theme.primary}>{src().branch}</text></box></Show>
+              </box>
+            </box>
+          )}
+        </Show>
+      </Panel>
+      <Show when={message()}>
+        <box height={1} backgroundColor={theme.panelMuted} paddingLeft={1} paddingRight={1}>
+          <text fg={theme.warning}>{statusLine()}</text>
+        </box>
+      </Show>
     </box>
   )
 }

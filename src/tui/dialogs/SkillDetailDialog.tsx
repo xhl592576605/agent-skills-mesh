@@ -198,9 +198,10 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
 
       <Show when={skill()} fallback={<text fg={theme.danger}>{i18n.t("err.SKILL_NOT_FOUND", { name: props.skillName })}</text>}>
         <box flexDirection="column">
-          <text fg={theme.textMuted}>
-            {i18n.t("detail.status")} <span style={{ fg: theme.text }}>{skill()!.status}</span>
-          </text>
+          <box flexDirection="row">
+            <text fg={theme.textMuted}>{i18n.t("detail.status")} </text>
+            <text fg={theme.text}>{skill()!.status}</text>
+          </box>
           <Show when={skill()!.description}>
             <text fg={theme.textMuted} wrapMode="none">
               {i18n.t("detail.desc")} {skill()!.description}

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import { useTerminalDimensions } from "@opentui/solid"
-import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js"
+import { Show, createEffect, createSignal, onCleanup, onMount } from "solid-js"
+import { TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme.js"
 import { useI18n } from "../context/i18n.js"
 import { useData } from "../context/data.js"
@@ -13,6 +14,8 @@ import { runDoctor, type DoctorCheck, type DoctorFix } from "../../core/services
 import { applyRepairPlan, buildRepairPlan } from "../../core/services/install-service.js"
 import { ConfirmDialog } from "../dialogs/ConfirmDialog.js"
 import { errorMessage } from "../../i18n/index.js"
+import { Panel } from "../components/Panel.js"
+import { DataTable, type Column } from "../components/DataTable.js"
 
 /**
  * Doctor 视图（design §9 `doctor` 映射）。
@@ -193,6 +196,34 @@ export function DoctorView() {
   const statusLabel = (status: DoctorCheck["status"]) =>
     status === "ok" ? i18n.t("doctor.statusOk") : status === "warning" ? i18n.t("doctor.statusWarn") : i18n.t("doctor.statusError")
 
+  const statusIcon = (status: DoctorCheck["status"]) =>
+    status === "ok" ? "✓" : status === "warning" ? "⚠" : "!"
+
+  const fixLabel = (check: DoctorCheck) => check.fix ? `${i18n.t("doctorView.fixable")} ${check.fix.type}` : i18n.t("doctorView.noAutoFix")
+
+  // message 列宽度：总宽(panel 内) - prefix(5) - state(22) - kind(26) - message 分隔线(2)。
+  const msgWidth = () => Math.max(20, dim().width - 57)
+  const doctorColumns = (): Column<DoctorCheck>[] => [
+    {
+      key: "state",
+      header: i18n.t("doctorView.headerState"),
+      width: 20,
+      render: (check) => ({ text: `${statusIcon(check.status)} ${statusLabel(check.status)}`, fg: statusColor(check.status) })
+    },
+    {
+      key: "kind",
+      header: i18n.t("doctorView.headerKind"),
+      width: 24,
+      render: (check, ctx) => ({ text: check.kind, fg: ctx.isCursorRow ? theme.text : theme.textMuted })
+    },
+    {
+      key: "message",
+      header: i18n.t("doctorView.headerMsg"),
+      width: msgWidth(),
+      render: (check) => ({ text: `${check.message}${check.fix ? `  ${i18n.t("doctorView.fixable")}` : ""}`, fg: theme.textMuted })
+    }
+  ]
+
   const statusLine = () => {
     if (busy()) return i18n.t("doctorView.working")
     if (message()) return message()
@@ -203,57 +234,38 @@ export function DoctorView() {
   }
 
   return (
-    <box flexDirection="column" flexGrow={1} width={dim().width}>
-      <box flexDirection="row" backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1}>
-        <text width={6} fg={theme.textMuted}>{i18n.t("doctorView.headerState")}</text>
-        <text width={20} fg={theme.textMuted}>{i18n.t("doctorView.headerKind")}</text>
-        <text fg={theme.textMuted}>{i18n.t("doctorView.headerMsg")}</text>
-      </box>
-      <box flexGrow={1} flexDirection="column">
-        <Show
-          when={checks().length > 0}
-          fallback={
-            <box paddingLeft={1}>
-              <text fg={theme.textMuted}>{i18n.t("doctorView.running")}</text>
-            </box>
-          }
-        >
-          <For each={checks()}>
-            {(check, i) => (
-              <box
-                flexDirection="row"
-                paddingLeft={1}
-                paddingRight={1}
-                backgroundColor={i() === cursor() ? theme.primary : undefined}
-              >
-                <text
-                  width={6}
-                  fg={i() === cursor() ? theme.backgroundPanel : statusColor(check.status)}
-                >
-                  {statusLabel(check.status)}
-                </text>
-                <text
-                  width={20}
-                  fg={i() === cursor() ? theme.backgroundPanel : theme.text}
-                  wrapMode="none"
-                >
-                  {check.kind}
-                </text>
-                <text
-                  fg={i() === cursor() ? theme.backgroundPanel : theme.textMuted}
-                  wrapMode="none"
-                >
-                  {check.message}
-                  {check.fix ? i18n.t("doctorView.fixable") : ""}
-                </text>
+    <box flexDirection="column" flexGrow={1} width={Math.max(1, dim().width - 2)} gap={1}>
+      <DataTable
+        theme={theme}
+        columns={doctorColumns()}
+        rows={checks()}
+        cursor={cursor()}
+        rowHeight={1}
+        flexGrow={1}
+        fallback={<box paddingLeft={1}><text fg={theme.textMuted}>{i18n.t("doctorView.running")}</text></box>}
+      />
+      <Panel theme={theme} height={7} paddingLeft={1} paddingRight={1}>
+        <Show when={selected()} fallback={<text fg={theme.textMuted}>{i18n.t("doctorView.running")}</text>}>
+          {(check: () => DoctorCheck) => (
+            <box flexDirection="row" gap={2} alignItems="center" flexGrow={1}>
+              <box width={5} height={3} border={true} borderColor={theme.border} backgroundColor={theme.panelMuted} flexDirection="column" alignItems="center" justifyContent="center">
+                <text fg={statusColor(check().status)} attributes={TextAttributes.BOLD}>{statusIcon(check().status)}</text>
               </box>
-            )}
-          </For>
+              <box flexDirection="column" flexGrow={1}>
+                <box flexDirection="row"><text width={12} fg={theme.textMuted}>{i18n.t("doctorView.checkItem")}</text><text fg={theme.primary}>{check().kind}</text></box>
+                <box flexDirection="row"><text width={12} fg={theme.textMuted}>{i18n.t("doctorView.headerState")}</text><text fg={statusColor(check().status)}>{statusIcon(check().status)} {statusLabel(check().status)}</text></box>
+                <box flexDirection="row"><text width={12} fg={theme.textMuted}>{i18n.t("doctorView.headerMsg")}</text><text fg={theme.textMuted} wrapMode="none">{check().message}</text></box>
+                <box flexDirection="row"><text width={12} fg={theme.textMuted}>{i18n.t("doctorView.fixLabel")}</text><text fg={check().fix ? theme.warning : theme.success} wrapMode="none">{fixLabel(check())}</text></box>
+              </box>
+            </box>
+          )}
         </Show>
-      </box>
-      <box height={1} backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1}>
-        <text fg={message() ? theme.warning : theme.textMuted}>{statusLine()}</text>
-      </box>
+      </Panel>
+      <Show when={busy() || message()}>
+        <box height={1} backgroundColor={theme.panelMuted} paddingLeft={1} paddingRight={1}>
+          <text fg={message() ? theme.warning : theme.textMuted}>{statusLine()}</text>
+        </box>
+      </Show>
     </box>
   )
 }

@@ -1,4 +1,3 @@
-import { For } from "solid-js"
 import type { Theme } from "../theme/index.js"
 import type { InstallationRecord } from "../../core/models/installation.js"
 import type { SkillRecord } from "../../core/models/skill.js"
@@ -10,12 +9,14 @@ import {
   installationKey
 } from "../state/projection.js"
 import { type TranslateFn } from "../context/i18n.js"
+import { DataTable, type Column } from "./DataTable.js"
 
 /**
- * skill×agent 表格（design §6）。
+ * skill×agent 表格（design §5.2）。
  *
- * 纯渲染组件：所有状态（cursor/pending/scroll）由父级 `matrix` 提供，本组件只读并映射为
- * 表头 + 行 + 单元格标签 + 光标高亮。可见行窗口由 `matrix.scrollOffset()` × `viewport` 切片。
+ * 纯渲染组件：所有状态（cursor/pending/scroll）由父级 `matrix` 提供，本组件只把
+ * skill 行 × agent 列映射为 `DataTable` 的 `columns` 配置。视觉效果（accent/行号/
+ * 分隔线/选中高亮）统一由 `DataTable` 处理，避免与 Source/Doctor 各自手拼产生错位。
  */
 export interface MatrixProps {
   rows: readonly SkillRecord[]
@@ -23,86 +24,69 @@ export interface MatrixProps {
   installations: Record<string, InstallationRecord>
   matrix: MatrixState
   theme: Theme
-  /** 翻译函数（与 theme 同为渲染环境，由父 useI18n 注入）。 */
   t: TranslateFn
-  /** Name 列宽（字符）。 */
   nameWidth?: number
-  /** 每个 agent 列宽（字符）。 */
   cellWidth?: number
-  /** 可见行数（决定滚动窗口高度）。 */
   viewport: number
 }
 
 export function Matrix(props: MatrixProps) {
   const theme = props.theme
-  const nameWidth = () => props.nameWidth ?? 24
-  const cellWidth = () => props.cellWidth ?? 9
+  const nameWidth = () => props.nameWidth ?? 28
+  const cellWidth = () => props.cellWidth ?? 12
 
-  // 可见窗口（scrollOffset 起 viewport 行）。末尾不足时 slice 自动截断。
-  const visibleRows = () => {
-    const off = props.matrix.scrollOffset()
-    return props.rows.slice(off, off + props.viewport)
+  // DataTable 列定义：name 列 + 每个 agent 列。
+  // agent 列的 render 闭包捕获 colIndex，用于判断二维光标单元格高亮。
+  const tableColumns = (): Column<SkillRecord>[] => {
+    const cols: Column<SkillRecord>[] = [
+      {
+        key: "name",
+        header: props.t("table.name"),
+        width: nameWidth(),
+        render: (skill, ctx) => ({
+          text: skill.name,
+          fg: ctx.isCursorRow ? theme.text : theme.textMuted
+        })
+      }
+    ]
+    props.columns.forEach((agentCol, colIdx) => {
+      cols.push({
+        key: agentCol.id,
+        header: agentCol.id,
+        width: cellWidth(),
+        align: "center",
+        render: (skill, ctx) => {
+          const intent = props.matrix.intentFor(skill.name, agentCol.id)
+          const info = cellInfo(
+            props.installations[installationKey(skill.name, agentCol.id)],
+            agentCol.enabled,
+            intent
+          )
+          const isCursorCell = ctx.isCursorRow && props.matrix.cursor().col === colIdx
+          return {
+            text: info.label,
+            fg: isCursorCell ? theme.primary : cellColor(info.kind, theme)
+          }
+        }
+      })
+    })
+    return cols
   }
 
-  return (
-    <box flexDirection="column">
-      {/* 表头 */}
-      <box flexDirection="row" backgroundColor={theme.backgroundPanel}>
-        <box width={nameWidth()} paddingLeft={1}>
-          <text fg={theme.textMuted}>{props.t("table.name")}</text>
-        </box>
-        <For each={props.columns}>
-          {(col) => (
-            <box width={cellWidth()} paddingLeft={1}>
-              <text fg={col.enabled ? theme.text : theme.textMuted}>
-                {col.id.slice(0, Math.max(1, cellWidth() - 2))}
-              </text>
-            </box>
-          )}
-        </For>
-      </box>
+  const viewport = () => ({
+    offset: props.matrix.scrollOffset(),
+    count: props.viewport
+  })
 
-      {/* 数据行（可见窗口） */}
-      <For each={visibleRows()}>
-        {(skill, i) => {
-          const absRow = () => props.matrix.scrollOffset() + i()
-          const isCursorRow = () => props.matrix.cursor().row === absRow()
-          return (
-            <box flexDirection="row" backgroundColor={isCursorRow() ? theme.backgroundPanel : undefined}>
-              <box width={nameWidth()} paddingLeft={1}>
-                <text fg={isCursorRow() ? theme.text : theme.textMuted}>
-                  {skill.name.length > nameWidth() - 2
-                    ? skill.name.slice(0, nameWidth() - 3) + "…"
-                    : skill.name}
-                </text>
-              </box>
-              <For each={props.columns}>
-                {(col, j) => {
-                  const intent = () => props.matrix.intentFor(skill.name, col.id)
-                  const info = () =>
-                    cellInfo(
-                      props.installations[installationKey(skill.name, col.id)],
-                      col.enabled,
-                      intent()
-                    )
-                  const isCursorCell = () => isCursorRow() && props.matrix.cursor().col === j()
-                  return (
-                    <box
-                      width={cellWidth()}
-                      paddingLeft={1}
-                      backgroundColor={isCursorCell() ? theme.primary : undefined}
-                    >
-                      <text fg={isCursorCell() ? theme.backgroundPanel : cellColor(info().kind, theme)}>
-                        {info().label}
-                      </text>
-                    </box>
-                  )
-                }}
-              </For>
-            </box>
-          )
-        }}
-      </For>
-    </box>
+  return (
+    <DataTable
+      theme={theme}
+      columns={tableColumns()}
+      rows={props.rows}
+      cursor={props.matrix.cursor().row}
+      viewport={viewport()}
+      rowHeight={1}
+      flexGrow={1}
+    />
   )
 }

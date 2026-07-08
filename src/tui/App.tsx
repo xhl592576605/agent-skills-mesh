@@ -7,6 +7,8 @@ import { I18nProvider, useI18n } from "./context/i18n.js"
 import { DialogProvider, useDialog } from "./context/dialog.js"
 import { ViewKeyProvider, type ViewKeyContextValue, type ViewKeyHandler } from "./context/view-key.js"
 import { StatusBar } from "./components/StatusBar.js"
+import { AppHeader } from "./components/AppHeader.js"
+import { TabBar } from "./components/TabBar.js"
 import { SkillAgentView } from "./views/SkillAgentView.js"
 import { SourceView } from "./views/SourceView.js"
 import { DoctorView } from "./views/DoctorView.js"
@@ -75,6 +77,7 @@ function AppShell() {
         i18n.t("hint.rowOn"),
         i18n.t("hint.delete"),
         i18n.t("hint.review"),
+        i18n.t("hint.info"),
         i18n.t("hint.agents"),
         i18n.t("hint.search"),
         i18n.t("hint.help")
@@ -118,6 +121,11 @@ function AppShell() {
       closeTop: dialog.closeTop,
       getViewHandler: () => viewHandler,
       setTab,
+      cycleTab: () => {
+        const order: Tab[] = ["skill", "source", "doctor"]
+        const i = order.indexOf(tab())
+        setTab(order[(i + 1) % order.length])
+      },
       refresh: () => void data.refresh(),
       showHelp,
       exit: exitTui,
@@ -154,6 +162,16 @@ function AppShell() {
     return undefined
   })
 
+  const summary = createMemo(() => {
+    const index = data.snapshot.index
+    const state = data.snapshot.state
+    const total = state ? Object.keys(state.installedSkills).length : Object.keys(index?.skills ?? {}).length
+    const issues = index?.issues ?? []
+    const errors = issues.filter((issue) => issue.severity === "error").length
+    const warnings = issues.filter((issue) => issue.severity === "warning").length
+    return { total, errors, warnings }
+  })
+
   return (
     <ViewKeyProvider value={viewKeyCtx}>
       <box
@@ -162,23 +180,18 @@ function AppShell() {
         flexDirection="column"
         backgroundColor={theme.background}
       >
-        {/* TabBar（tabs() 响应式：语言切换后 label 重算；tab() 在 JSX getter 里响应式） */}
-        <box flexDirection="row" backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1}>
-          {tabs().map((t) => (
-            <box
-              paddingLeft={1}
-              paddingRight={1}
-              backgroundColor={tab() === t.key ? theme.primary : undefined}
-            >
-              <text fg={tab() === t.key ? theme.backgroundPanel : theme.textMuted}>
-                [{t.label}]
-              </text>
-            </box>
-          ))}
-        </box>
+        <AppHeader
+          summary={summary()}
+          theme={theme}
+          totalLabel={i18n.t("header.total")}
+          errorLabel={i18n.t("header.errors")}
+          warningLabel={i18n.t("header.warnings")}
+          okLabel={i18n.t("header.ok")}
+        />
+        <TabBar tabs={tabs()} active={tab()} theme={theme} />
 
         {/* 内容视图（design §13：数据驱动 Show 切换，新增 tab 不改结构） */}
-        <box flexGrow={1}>
+        <box flexGrow={1} paddingLeft={1} paddingRight={1} paddingTop={1}>
           <Show when={tab() === "skill"}>
             <SkillAgentView />
           </Show>

@@ -27,6 +27,8 @@ export interface AppShellKeyDeps {
   getViewHandler: () => ViewKeyHandler | null
   /** 切换 tab（1/2/3 全局键）。 */
   setTab: (tab: AppTab) => void
+  /** 循环切换到下一个 tab（Tab 全局键）。 */
+  cycleTab: () => void
   /** 全局刷新（ctrl+r）。 */
   refresh: () => void
   /** 帮助弹窗（?）。 */
@@ -67,6 +69,8 @@ export function createAppShellKeyHandler(deps: AppShellKeyDeps): (key: KeyEvent)
       deps.setTab("source")
     } else if (key.name === "3") {
       deps.setTab("doctor")
+    } else if (key.name === "tab") {
+      deps.cycleTab()
     } else if (key.ctrl && key.name === "r") {
       deps.refresh()
     } else if (key.sequence === "?") {

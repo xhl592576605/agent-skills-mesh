@@ -75,12 +75,10 @@ export function PromptDialog(props: ParentProps<PromptDialogProps>) {
         </text>
         <text fg={theme.textMuted}>esc</text>
       </box>
-      {/* 输入行：value（空时占位灰）+ block cursor。空 value 用 placeholder 灰显示。 */}
-      <box height={1} backgroundColor={theme.background}>
-        <text fg={value() ? theme.text : theme.textMuted}>{display()}</text>
-        <text fg={theme.primary} attributes={TextAttributes.BOLD}>
-          _
-        </text>
+      {/* 输入行：value（空时占位灰）+ 竖线光标。与 SearchBar 同款样式（▏ 光标 + wrapMode）。 */}
+      <box height={1} flexDirection="row" alignItems="center">
+        <text fg={value() ? theme.text : theme.textMuted} wrapMode="none">{display()}</text>
+        <text fg={theme.primary}>▏</text>
       </box>
       <box flexDirection="row" gap={1}>
         <text fg={theme.textMuted}>{i18n.t("prompt.footer")}</text>

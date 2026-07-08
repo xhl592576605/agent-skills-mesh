@@ -30,7 +30,7 @@ export interface SkillAgentKeyDeps {
   onInfo?: () => void | Promise<void>
   /** 按下 `d` 删除当前 skill（从 SSOT 移除 + 断所有 agent symlink）。可选：未注入时 fallthrough。 */
   onDeleteSkill?: (skillName: string) => void | Promise<void>
-  /** 按下 `m` 打开 agent 管理弹窗（Manage agents：启停/添加）。可选：未注入时 fallthrough。 */
+  /** 按下 `A`（shift+a）打开 agent 管理弹窗（Manage agents：启停/添加）。可选：未注入时 fallthrough。 */
   onManageAgents?: () => void
 }
 
@@ -108,7 +108,7 @@ export function handleMatrixKey(deps: SkillAgentKeyDeps, key: KeyEvent): boolean
     toggleCurrent(deps)
     return true
   }
-  if (k === "a") {
+  if (k === "a" && !key.shift) {
     rowAll(deps, true)
     return true
   }
@@ -129,9 +129,9 @@ export function handleMatrixKey(deps: SkillAgentKeyDeps, key: KeyEvent): boolean
     }
     return false
   }
-  // `m` 打开 agent 管理弹窗（Manage agents：启停/添加）；未注入时 fallthrough。
-  // 用 m 而非 A，避免与小写 a（行全装）大小写重复、视觉混淆。
-  if (k === "m" && deps.onManageAgents) {
+  // `A`（shift+a）打开 agent 管理弹窗（Manage agents：启停/添加）；未注入时 fallthrough。
+  // 小写 a 为行全装，靠 key.shift 区分。
+  if (k === "a" && key.shift && deps.onManageAgents) {
     deps.onManageAgents()
     return true
   }

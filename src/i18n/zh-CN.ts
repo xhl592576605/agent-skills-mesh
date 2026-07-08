@@ -61,6 +61,11 @@ export const dict: Dict = {
   "common.name": "名称",
   "common.esc": "esc",
 
+  "header.total": "项",
+  "header.errors": "错误",
+  "header.warnings": "警告",
+  "header.ok": "正常",
+
   "status.ok": "成功",
   "status.failed": "失败",
   "status.failedDetail": "失败：{{error}}",
@@ -85,17 +90,18 @@ export const dict: Dict = {
   "btn.ok": "确定",
 
   // === TUI Tab 标签 ===
-  "tab.skill": "1 技能×智能体",
+  "tab.skill": "1 技能",
   "tab.source": "2 来源",
   "tab.doctor": "3 健康检查",
 
   // === TUI StatusBar hints ===
-  "hint.move": "↑↓←→ 移动",
+  "hint.move": "↑↓ 移动",
   "hint.toggle": "space 切换",
   "hint.rowOn": "a 行全装",
   "hint.delete": "d 删除",
   "hint.review": "enter 审查",
-  "hint.agents": "m 智能体",
+  "hint.agents": "A 智能体",
+  "hint.info": "i 详情",
   "hint.search": "/ 搜索",
   "hint.moveV": "↑↓ 移动",
   "hint.add": "a 添加",
@@ -116,7 +122,7 @@ export const dict: Dict = {
   "help.globalLine": "1/2/3 切换 · ctrl+r 刷新 · L 语言 · ? 帮助 · esc/ctrl+c 退出",
   "help.skillSection": "技能×智能体",
   "help.skillLine":
-    "↑↓←→/hjkl 移动 · space 切换 · a 行全装 · d 删除 · enter 审查 · i 详情 · m 智能体 (space 切换 · a 添加) · / 搜索",
+    "↑↓←→/hjkl 移动 · space 切换 · a 行全装 · d 删除 · enter 审查 · i 详情 · A 智能体 (space 切换 · a 添加) · / 搜索",
   "help.sourceSection": "来源",
   "help.sourceLine": "a 添加 · u 更新 · d 移除 · e/x 启用/禁用 · enter 详情",
   "help.doctorSection": "健康检查",
@@ -279,7 +285,7 @@ export const dict: Dict = {
   "skillView.summaryRow": "{{skill}}：{{parts}}",
   "skillView.appliedPartial": "已应用 {{ok}}，{{failed}} 失败（保留以便重试）",
   "skillView.appliedOk": "已应用 {{count}} 项",
-  "skillView.pressReview": "按 r 审查 {{count}} 项待处理",
+  "skillView.pressReview": "按 enter 审查 {{count}} 项待处理",
   "skillView.skillCount": "{{count}} 个技能",
   "skillView.someConflicts": "部分变更存在冲突 — 见 `asm doctor` 或重试",
   "skillView.conflictFallback": "冲突",
@@ -288,7 +294,7 @@ export const dict: Dict = {
   "sourceView.headerId": "id",
   "sourceView.headerType": "type",
   "sourceView.headerEnabled": "启用",
-  "sourceView.headerPathMeta": "路径 / 元信息",
+  "sourceView.headerPathMeta": "路径",
   "sourceView.noSource": "未选中来源",
   "sourceView.noSources": "暂无来源。按 `a` 添加。",
   "sourceView.sourceCount": "{{count}} 个来源",
@@ -320,13 +326,16 @@ export const dict: Dict = {
   "sourceView.failedSuffix": " · 失败：{{list}}",
   "sourceView.noSourcesUpdated": "没有来源被更新",
   "sourceView.reportLine": "{{sourceId}}：{{detail}}",
+  "sourceView.sourceId": "来源 ID",
+  "sourceView.repoUrl": "仓库 URL",
+  "sourceView.defaultBranch": "默认分支",
 
   // === TUI DoctorView（tab 3）===
   "doctorView.headerState": "状态",
   "doctorView.headerKind": "类型",
   "doctorView.headerMsg": "信息 · 修复",
   "doctorView.running": "正在运行健康检查...",
-  "doctorView.fixable": "  [可修复]",
+  "doctorView.fixable": "[可修复]",
   "doctorView.noFix": "{{kind}}：无法自动修复（需手动处理）",
   "doctorView.fixTitle": "修复 {{kind}}？",
   "doctorView.fixOk": "已修复：{{kind}}",
@@ -342,6 +351,9 @@ export const dict: Dict = {
   "doctorView.snapshotNotLoaded": "快照未加载",
   "doctorView.repairConflict": "修复冲突：{{warnings}}",
   "doctorView.unsupportedFix": "不支持的修复类型：{{type}}",
+  "doctorView.noAutoFix": "无需修复 / 无自动修复",
+  "doctorView.checkItem": "检查项",
+  "doctorView.fixLabel": "修复",
 
   // === doctor 状态文本标签 ===
   "doctor.statusOk": "正常",

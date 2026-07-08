@@ -140,6 +140,14 @@ fetch / cache libraries.
 
 - Reading a signal/store into a `const` before JSX (`const t = tab(); ...
   <Show when={t}>`) — breaks reactivity; use `{tab()}` in JSX.
+- Freezing a render-callback result into a `const` before JSX (e.g.
+  `const content = col.render(row)` then `<text>{content.text}</text>`) —
+  severs the reactive chain; signal reads inside `col.render` are never
+  re-tracked so the cell never updates on intent/cursor change. Wrap with
+  `createMemo(() => col.render(...))` and read `content()` in JSX. Likewise,
+  pass reactive booleans to child renderers as accessors (`() => boolean`),
+  not pre-evaluated boolean snapshots — a snapshot goes stale when the cursor
+  moves but the `<For>` callback does not re-run.
 - Calling `useDialog`/`useTheme` inside `useKeyboard` or async callbacks — loses
   owner; capture the value in the component body.
 - A view subscribing its own `useKeyboard` — double dispatch; register a
@@ -156,3 +164,12 @@ fetch / cache libraries.
 - `usePaste(callback)` from `@opentui/solid` is the supported hook for terminal
   paste (cmd+v / bracketed paste); add it alongside `useKeyboard` in input
   dialogs (`PromptDialog`). `useKeyboard` char capture alone drops pasted text.
+- **Do not use semi-transparent `backgroundColor` (alpha < 255) for full-screen
+  dialog overlays** — OpenTUI 0.4.x's native `setCellWithAlphaBlending` corrupts
+  CJK wide-character cells: Chinese characters under a translucent overlay vanish
+  entirely while ASCII stays visible. Lowering alpha does not help (verified at
+  alpha 25 and 12). The dialog `Dialog.tsx` therefore uses **no overlay bg** —
+  the outer mask box is transparent and the inner panel relies on
+  `border={true} borderColor={theme.borderStrong}` + `backgroundPanel` for
+  visual separation. If OpenTUI ever fixes wide-char alpha blending, the
+  `theme.overlay` token can be re-enabled.

@@ -61,8 +61,14 @@ export function SkillAgentView() {
   const [message, setMessage] = createSignal("")
   const [hasApplyError, setHasApplyError] = createSignal(false)
 
-  // 预留行：TabBar(1) + SearchBar(3) + StatusLine(1) + Inspector(4) + StatusBar(1) ≈ 10，含 margin 预留 11。
-  const viewport = () => Math.max(1, dim().height - 11)
+  // 预留行：AppHeader/TabBar/分隔线 + SearchBar + Inspector + StatusBar + 间距。
+  const viewport = () => Math.max(1, dim().height - 17)
+  const matrixNameWidth = () => Math.max(28, Math.min(46, Math.floor((dim().width - 8) * 0.22)))
+  const matrixCellWidth = () => {
+    const count = Math.max(1, columns().length)
+    const available = Math.max(40, dim().width - matrixNameWidth() - 12)
+    return Math.max(12, Math.min(34, Math.floor(available / count)))
+  }
 
   // R1：matrix 行 = 已 add 到 SSOT 的 skill（与 `asm skill list` 语义一致）；
   // 从 state.installedSkills 取 name，回查 index.skills 拿 SkillRecord（含 status/tags 供搜索过滤）。
@@ -238,7 +244,7 @@ export function SkillAgentView() {
       : i18n.t("skillView.skillCount", { count: filtered().length }))
 
   return (
-    <box flexDirection="column" flexGrow={1} width={dim().width}>
+    <box flexDirection="column" flexGrow={1} width={Math.max(1, dim().width - 2)} gap={1}>
       <SearchBar query={search.query()} active={search.active()} theme={theme} t={i18n.t} />
       <box flexGrow={1} flexDirection="column">
         <Show
@@ -257,14 +263,17 @@ export function SkillAgentView() {
               theme={theme}
               t={i18n.t}
               viewport={viewport()}
+              nameWidth={matrixNameWidth()}
+              cellWidth={matrixCellWidth()}
             />
           </Show>
         </Show>
       </box>
-      {/* 状态/提示行 */}
-      <box height={1} backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1}>
-        <text fg={matrix.hasPending() ? theme.warning : theme.textMuted}>{statusLine()}</text>
-      </box>
+      <Show when={message() || matrix.hasPending()}>
+        <box height={1} backgroundColor={theme.panelMuted} paddingLeft={1} paddingRight={1}>
+          <text fg={matrix.hasPending() ? theme.warning : theme.textMuted}>{statusLine()}</text>
+        </box>
+      </Show>
       <Inspector
         skill={selected()}
         columns={columns()}

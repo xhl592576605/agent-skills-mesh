@@ -28,17 +28,24 @@ src/tui/
 │   ├── skill-agent-keys.ts  # createSkillAgentKeyHandler + toggle/row-all helpers
 │   └── source-keys.ts       # createSourceKeyHandler + moveCursor
 ├── components/
+│   ├── AppHeader.tsx        # top product title + summary counts
+│   ├── TabBar.tsx           # tab strip with active underline
+│   ├── Panel.tsx            # reusable bordered visual container
 │   ├── Matrix.tsx           # skill×agent grid (pure render, state via props)
-│   ├── Inspector.tsx        # skill detail panel
+│   ├── Inspector.tsx        # skill detail panel/card
 │   ├── SearchBar.tsx        # "/" fuzzy trigger
-│   └── StatusBar.tsx        # bottom hints/status (accepts `hints` prop)
+│   └── StatusBar.tsx        # bottom keycap hints/status (accepts `hints` prop)
 ├── dialogs/
 │   ├── Dialog.tsx           # base overlay (position absolute + zIndex + RGBA mask)
 │   ├── ConfirmDialog.tsx    # show(): Promise<boolean>
 │   ├── SelectDialog.tsx     # show(): Promise<item | undefined>
 │   ├── PromptDialog.tsx     # show(): Promise<string | undefined>
 │   ├── AddSourceDialog.tsx
-│   └── SkillDetailDialog.tsx
+│   ├── SkillDetailDialog.tsx
+│   ├── MultiSelectDialog.tsx
+│   ├── AddAgentDialog.tsx
+│   ├── AgentManagerDialog.tsx
+│   └── SkillMdDialog.tsx
 └── views/
     ├── SkillAgentView.tsx   # tab 1 (matrix + search + inspector)
     ├── SourceView.tsx       # tab 2 (sources CRUD)

@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"OpenTUI box/text 原语、theme token、组件 props 与 Dialog/Panel 风格边界，指导本次视觉组件改造"}
+{"file":".trellis/spec/frontend/solid-patterns.md","reason":"集中键盘路由与 Solid 响应式约束，确保样式改造不破坏现有交互"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"确认 TUI snapshot/pending/dialog stack 流程不变，避免样式任务误改业务状态"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"core-zero-change、测试命令、OpenTUI 测试要求，是实现与验证的质量门"}

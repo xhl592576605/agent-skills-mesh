@@ -37,6 +37,7 @@ function makeDeps(overrides: Partial<AppShellKeyDeps> = {}): AppShellKeyDeps {
     showHelp: vi.fn(),
     exit: vi.fn(),
     toggleLang: vi.fn(),
+    cycleTab: vi.fn(),
     ...overrides
   }
 }
@@ -89,6 +90,13 @@ describe("createAppShellKeyHandler — view handler 优先消费", () => {
     createAppShellKeyHandler(deps)(key("1"))
     expect(viewHandler).toHaveBeenCalledOnce()
     expect(deps.setTab).toHaveBeenCalledWith("skill")
+  })
+
+  it("Tab 键循环切 tab（cycleTab，不走 setTab）", () => {
+    const deps = makeDeps()
+    createAppShellKeyHandler(deps)(key("tab"))
+    expect(deps.cycleTab).toHaveBeenCalledOnce()
+    expect(deps.setTab).not.toHaveBeenCalled()
   })
 
   it("view handler 为 null → 直接全局键", () => {

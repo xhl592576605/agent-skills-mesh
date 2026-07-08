@@ -76,7 +76,9 @@ content component (focus/keys) + `show()` helper returning a typed `Promise`.
   caller routes intent to a core service.
 - `StatusBar` accepts a `hints: readonly string[]` prop (per-tab key hints) per
   the cross-child contract — extenders inject hints, they do not restructure the
-  component.
+  component. It may render each hint as a keycap by splitting the first space in
+  the translated hint; callers should keep the leading key stable (`enter 审查`,
+  `ctrl+r refresh`, etc.).
 
 ---
 
@@ -113,6 +115,13 @@ Rules:
 ## Styling and Symbols
 
 - Use OpenTUI layout + RGBA theme tokens only. No CSS, no browser styling libs.
+- Put reusable visual shell elements in `src/tui/components/`: `AppHeader` for
+  product title + summary counts, `TabBar` for the top tab strip, `Panel` for
+  bordered cards/tables, and `StatusBar` for bottom keycap hints. Views compose
+  these components instead of each view inventing its own border/keycap style.
+- Theme additions belong in `src/tui/theme/index.ts` as semantic tokens
+  (`panel`, `border`, `selection`, `selectionAccent`, `keyBg`, `keyBorder`,
+  `cyan`, etc.). Components must not call `RGBA.fromHex(...)` directly.
 - Keep status indicators readable **without color** — always pair color with a
   text/symbol label. Matrix cell labels: `[on]` / `[off]` / `[+]` (pending
   install) / `[-]` (pending uninstall) / `[!]` (warning) / `—` (disabled).
