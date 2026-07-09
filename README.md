@@ -13,13 +13,19 @@
 
 ---
 
-Agent Skills Mesh（命令名 `asm`）把"技能**从哪来**、**存在哪**、**分发给谁**"拆成三层，用**单一可信源（SSOT）**集中存每一份技能，再通过 **symlink** 分发到你启用的 agent。一份技能只维护一次，所有 agent 共享，告别多副本漂移。
+Agent Skills Mesh（命令名 `asm`）把"技能**从哪来**、**存在哪**、**分发给谁**"拆成三层，用**单一可信源（SSOT）**集中存每一份技能，再通过 **symlink**（Windows 上为 directory junction）分发到你启用的 agent。一份技能只维护一次，所有 agent 共享，告别多副本漂移。
+
+<p align="center">
+  <img src="docs/image/preview.gif" alt="Agent Skills Mesh TUI 预览" width="820">
+</p>
+
+> TUI 预览（循环演示）：Skill×Agent 矩阵 → 技能详情 → Source 来源管理 → Doctor 健康检查
 
 ### 特性
 
 - **三层模型** — `source`（来源）/ `skill`（技能库 SSOT）/ `agent`（启用分发），职责清晰
 - **单一可信源（SSOT）** — 每份技能只存一份，一处变更，所有启用的 agent 同步
-- **symlink 分发** — 启用/禁用即建/删 symlink，零拷贝、即时生效
+- **symlink / junction 分发** — 启用/禁用即建/删链接（macOS/Linux symlink，Windows directory junction），零拷贝、即时生效
 - **多来源** — git 仓库 / 本地 folder / 单个 skill，自动推断类型
 - **全生命周期** — 搜索、添加、更新、删除、rebind 孤儿、批量操作
 - **交互式 TUI** — 基于 [@opentui/solid](https://opentui.com)：skill×agent 矩阵 + web 风格浮层弹窗 + fuzzy 搜索
@@ -104,19 +110,21 @@ asm tui
 
 | 键 | 作用 |
 |---|---|
-| `1` / `2` / `3` | 切 tab |
-| `↑` `↓` `←` `→` | 移动光标 |
+| `1` / `2` / `3` / `Tab` | 切换 / 循环切换 tab |
+| `↑` `↓` `←` `→` / `h j k l` | 移动光标 |
 | `space` | 切换单元格（install / uninstall） |
 | `enter` | 审查 pending（弹窗确认后 apply） |
 | `a` | 当前行全装（所有 agent） |
+| `A`（Shift+a） | 打开 agent 管理弹窗 |
 | `d` | 删除当前 skill（SSOT + symlink） |
-| `m` | 管理 agent（启停 / 添加，弹窗） |
-| `+` | 添加自定义 agent（id + skills_dir） |
-| `ctrl + r` | 全局刷新（重新扫描） |
-| `/` | fuzzy 搜索 |
 | `i` | 技能详情 |
+| `/` | fuzzy 搜索 |
+| `L`（Shift+l） | 中 / 英 切换 |
+| `ctrl + r` | 全局刷新（重新扫描） |
 | `?` | 帮助 |
-| `ESC` | 关弹窗 / 退出 |
+| `ESC` / `ctrl + c` | 关弹窗 / 退出 |
+
+> agent 管理弹窗内：`space` 启停 agent · `a` 添加自定义 agent · `d` 删除 agent（内置不可删）
 
 > [!TIP]
 > 所有写操作（添加/删除/启用/修复）都会弹出 **web 风格浮层确认框**（半透明遮罩），`ESC` / 点击遮罩 / `ctrl+c` 可取消。

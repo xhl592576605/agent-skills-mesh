@@ -13,13 +13,19 @@
 
 ---
 
-Agent Skills Mesh (`asm`) splits skill management into three layers — **where skills come from, where they live, and which agents receive them**. A **single source of truth (SSOT)** stores each skill once; **symlinks** distribute it to the agents you enable. Maintain a skill once, share it everywhere — no more duplicate drift.
+Agent Skills Mesh (`asm`) splits skill management into three layers — **where skills come from, where they live, and which agents receive them**. A **single source of truth (SSOT)** stores each skill once; **symlinks** (directory junctions on Windows) distribute it to the agents you enable. Maintain a skill once, share it everywhere — no more duplicate drift.
+
+<p align="center">
+  <img src="docs/image/preview.gif" alt="Agent Skills Mesh TUI preview" width="820">
+</p>
+
+> TUI preview (loop): Skill×Agent matrix → skill details → Source management → Doctor health checks
 
 ### Features
 
 - **Three-layer model** — `source` (origin) / `skill` (SSOT library) / `agent` (distribution), with clear separation of concerns
 - **Single source of truth (SSOT)** — each skill stored once; change it once and every enabled agent stays in sync
-- **Symlink distribution** — enable/disable just creates/removes a symlink: zero-copy, instant
+- **Symlink / junction distribution** — enable/disable just creates/removes a link (symlink on macOS/Linux, directory junction on Windows): zero-copy, instant
 - **Multiple source types** — git repo / local folder / single skill, auto-inferred
 - **Full lifecycle** — search, add, update, remove, rebind orphans, batch operations
 - **Interactive TUI** — built on [@opentui/solid](https://opentui.com): skill×agent matrix + web-style modal dialogs + fuzzy search
@@ -100,16 +106,21 @@ Three tabs (`1`/`2`/`3` to switch):
 
 | Key | Action |
 |---|---|
-| `1` / `2` / `3` | Switch tab |
-| `↑` `↓` `←` `→` | Move cursor |
+| `1` / `2` / `3` / `Tab` | Switch / cycle tab |
+| `↑` `↓` `←` `→` / `h j k l` | Move cursor |
 | `space` | Toggle cell (install / uninstall) |
 | `enter` | Review pending (apply after dialog confirms) |
-| `a` / `d` | Install / uninstall whole row |
-| `ctrl + r` | Global refresh (rescan) |
-| `/` | Fuzzy search |
+| `a` | Install whole row (all agents) |
+| `A` (Shift+a) | Open agent manager dialog |
+| `d` | Delete current skill (SSOT + symlinks) |
 | `i` | Skill details |
+| `/` | Fuzzy search |
+| `L` (Shift+l) | Toggle zh / en |
+| `ctrl + r` | Global refresh (rescan) |
 | `?` | Help |
-| `ESC` | Close dialog / quit |
+| `ESC` / `ctrl + c` | Close dialog / quit |
+
+> Inside the agent manager dialog: `space` enable/disable agent · `a` add custom agent · `d` remove agent (built-ins cannot be removed)
 
 > [!TIP]
 > Every write operation (add / remove / enable / repair) pops up a **web-style modal confirmation** (semi-transparent overlay); cancel with `ESC`, clicking the overlay, or `ctrl+c`.
