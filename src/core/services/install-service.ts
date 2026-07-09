@@ -7,7 +7,7 @@ import type { InstallAction, InstallPlan, RepairPlan, UninstallPlan } from "../m
 import type { SkillCandidate, SkillRecord } from "../models/skill.js";
 import { createEmptyState, type InstalledSkillRecord, type StateFile } from "../models/state.js";
 import type { StateStore } from "../storage/state-store.js";
-import { ensureDir, pathExists } from "../../utils/fs.js";
+import { createSymlink, ensureDir, normalizeLinkTarget, pathExists } from "../../utils/fs.js";
 import { resolveConfiguredPath } from "../../utils/path.js";
 import { sha256Directory } from "../../utils/hash.js";
 import {
@@ -49,8 +49,7 @@ export async function detectInstallation(skill: SkillRecord, agentId: string, sk
   const lstat = await safeLstat(targetPath);
   if (!lstat) return expectedEnabled ? { ...base, status: "missing", reason: "enabled agent symlink is missing" } : undefined;
   if (lstat.isSymbolicLink()) {
-    const linkTargetRaw = await fs.readlink(targetPath);
-    const linkTarget = path.resolve(path.dirname(targetPath), linkTargetRaw);
+    const linkTarget = path.resolve(path.dirname(targetPath), normalizeLinkTarget(await fs.readlink(targetPath)));
     if (!(await pathExists(linkTarget))) return { ...base, status: "broken-link", linkTarget, reason: "symlink target is missing" };
     if (expected && samePath(linkTarget, expected)) {
       return expectedEnabled
@@ -115,9 +114,9 @@ export async function buildInstallPlan(config: AppConfig, index: IndexFile, skil
   const targetPath = safeJoin(resolveConfiguredPath(agent.skills_dir), skill.name, "agent skill path");
   const lstat = await safeLstat(targetPath);
   if (!lstat) {
-    actions.push({ type: "create-symlink", agentId, targetPath, linkTarget: record.ssotPath });
+    actions.push({ type: "create-link", agentId, targetPath, linkTarget: record.ssotPath });
   } else if (lstat.isSymbolicLink()) {
-    const linkTarget = path.resolve(path.dirname(targetPath), await fs.readlink(targetPath));
+    const linkTarget = path.resolve(path.dirname(targetPath), normalizeLinkTarget(await fs.readlink(targetPath)));
     if (samePath(linkTarget, record.ssotPath)) actions.push({ type: "skip", agentId, targetPath, reason: "same SSOT symlink already installed" });
     else actions.push({ type: "conflict", agentId, targetPath, reason: `target symlink points to ${linkTarget}` });
   } else {
@@ -139,9 +138,9 @@ export async function applyInstallPlan(plan: InstallPlan, stateStore?: StateStor
   if (plan.hasConflict) throw bizError("INSTALL_PLAN_CONFLICT", {}, "Install plan has conflicts");
   for (const action of plan.actions) {
     if (action.type === "copy-to-ssot") await copySkillDirToSsot(action.sourcePath, action.targetPath, { replace: action.replace });
-    else if (action.type === "create-symlink") {
+    else if (action.type === "create-link") {
       await ensureDir(path.dirname(action.targetPath));
-      await fs.symlink(action.linkTarget, action.targetPath, "dir");
+      await createSymlink(action.targetPath, action.linkTarget);
     } else if (action.type === "update-state" && stateStore) {
       const state = await stateStore.read();
       const metadata = await readSkillMetadata(action.record.ssotPath, action.record.skillName);
@@ -166,7 +165,7 @@ export async function buildUninstallPlan(config: AppConfig, skillName: string, a
   const actions: InstallAction[] = [];
   const record = state.installedSkills[skillName];
   if (!lstat) actions.push({ type: "skip", agentId, targetPath, reason: "target missing" });
-  else if (lstat.isSymbolicLink()) actions.push({ type: "remove-symlink", agentId, targetPath });
+  else if (lstat.isSymbolicLink()) actions.push({ type: "remove-link", agentId, targetPath });
   else actions.push({ type: "conflict", agentId, targetPath, reason: "refuse to remove real directory or file" });
 
   if (record) {
@@ -180,7 +179,7 @@ export async function buildUninstallPlan(config: AppConfig, skillName: string, a
 export async function applyUninstallPlan(plan: UninstallPlan, stateStore?: StateStore): Promise<void> {
   if (plan.hasConflict) throw bizError("UNINSTALL_PLAN_CONFLICT", {}, "Uninstall plan has conflicts");
   for (const action of plan.actions) {
-    if (action.type === "remove-symlink") await fs.unlink(action.targetPath);
+    if (action.type === "remove-link") await fs.unlink(action.targetPath);
     else if (action.type === "update-state" && stateStore) {
       const state = await stateStore.read();
       state.installedSkills[action.record.skillName] = action.record;

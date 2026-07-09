@@ -91,6 +91,7 @@ Pattern (`src/core/errors.ts`):
   - skill-service: `SKILL_ALREADY_INSTALLED`, `SKILL_NOT_IN_INDEX`, `SKILL_NO_CANDIDATE`, `SKILL_MULTIPLE_CANDIDATES`, `SKILL_NOT_INSTALLED`, `SOURCE_NOT_PROVIDE_SKILL`, `CANDIDATE_NOT_CONFIGURED_SOURCE`
   - agent-service: `AGENT_ID_INVALID`, `AGENT_ALREADY_EXISTS`, `AGENT_BUILTIN_NO_REMOVE` (`AGENT_NOT_FOUND` is reused from install/repair)
   - ssot/config (`ssot-service.ts`, `config-store.ts`): `SOURCE_NOT_FOUND`, `COPIED_SKILL_INVALID`, `SSOT_TARGET_NOT_DIRECTORY`, `SSOT_TARGET_EXISTS`, `INVALID_TOML`, `CONFIG_NOT_FOUND`
+  - safe-path (`utils/safe-path.ts`): `INVALID_SKILL_NAME` (cross-platform skill name validation — Windows-forbidden chars + reserved names)
 - `bizError(code, params, message?)` — returns a **plain `Error` instance** with附加 `code` / `params` properties. **Not a subclass** — stays within the "no hierarchy" rule字面 while enabling UI translation branching. `message` is the English fallback for logs / non-i18n contexts.
 - `isBizError(e)` — duck-type guard (`e instanceof Error && typeof e.code === "string"`).
 

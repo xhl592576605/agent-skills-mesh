@@ -4,7 +4,7 @@ import matter from "gray-matter";
 import type { AppConfig, SourceConfig } from "../models/config.js";
 import type { SkillCandidate } from "../models/skill.js";
 import type { InstalledAgentRecord, InstalledSkillRecord, InstalledSkillSource } from "../models/state.js";
-import { ensureDir, pathExists, removeRecursive } from "../../utils/fs.js";
+import { createSymlink, ensureDir, normalizeLinkTarget, pathExists, removeRecursive } from "../../utils/fs.js";
 import { resolveConfiguredPath } from "../../utils/path.js";
 import { sha256Directory } from "../../utils/hash.js";
 import { assertPathInside, assertSafeSkillName, safeJoin } from "../../utils/safe-path.js";
@@ -132,11 +132,11 @@ export async function ensureSymlinkToSsot(targetPath: string, ssotPath: string):
   const stat = await safeLstat(targetPath);
   if (!stat) {
     await ensureDir(path.dirname(targetPath));
-    await fs.symlink(ssotPath, targetPath, "dir");
+    await createSymlink(targetPath, ssotPath);
     return { status: "created" };
   }
   if (!stat.isSymbolicLink()) return { status: "conflict", reason: "target exists and is not a symlink" };
-  const linkTarget = path.resolve(path.dirname(targetPath), await fs.readlink(targetPath));
+  const linkTarget = path.resolve(path.dirname(targetPath), normalizeLinkTarget(await fs.readlink(targetPath)));
   if (samePath(linkTarget, ssotPath)) return { status: "ok" };
   return { status: "conflict", reason: `target symlink points to ${linkTarget}` };
 }
@@ -167,7 +167,7 @@ export async function replaceSymlinkToSsot(targetPath: string, ssotPath: string)
     await fs.unlink(targetPath);
   }
   await ensureDir(path.dirname(targetPath));
-  await fs.symlink(ssotPath, targetPath, "dir");
+  await createSymlink(targetPath, ssotPath);
 }
 
 export async function safeLstat(filePath: string) {
@@ -180,5 +180,8 @@ export async function safeLstat(filePath: string) {
 }
 
 export function samePath(left: string, right: string): boolean {
-  return path.resolve(left) === path.resolve(right);
+  const a = path.resolve(left);
+  const b = path.resolve(right);
+  // Windows/macOS 文件系统大小写不敏感 → 不敏感比较；Linux 保持大小写敏感。
+  return process.platform === "linux" ? a === b : a.toLowerCase() === b.toLowerCase();
 }

@@ -53,7 +53,7 @@ applyUninstallPlan(plan: UninstallPlan, stateStore?: StateStore): Promise<void>
 - `index.json` writes must use a temp file + rename atomic write pattern.
 - `asm install --dry-run` must only print the plan and must not create symlinks or directories beyond reads needed to build the plan.
 - `asm install` may create a symlink only when the target path is missing or repair behavior is explicitly represented by the install plan.
-- `asm uninstall` may delete only symlinks. It must not delete source skill directories, real directories, or regular files.
+- `asm uninstall` may delete only symlinks (Windows junctions included — both are reparse points removed via `fs.unlink`). It must not delete source skill directories, real directories, or regular files.
 
 ### 4. Validation & Error Matrix
 
@@ -290,8 +290,8 @@ Install actions must distinguish side effects explicitly:
 
 ```ts
 { type: "copy-to-ssot"; sourcePath: string; targetPath: string; replace: boolean }
-{ type: "create-symlink"; agentId: string; targetPath: string; linkTarget: string }
-{ type: "remove-symlink"; agentId: string; targetPath: string }
+{ type: "create-link"; agentId: string; targetPath: string; linkTarget: string }
+{ type: "remove-link"; agentId: string; targetPath: string }
 { type: "update-state"; record: InstalledSkillRecord; agentId?: string; removeAgentId?: string }
 ```
 
@@ -299,10 +299,10 @@ Install actions must distinguish side effects explicitly:
 
 - ASM-managed installed skill contents live under `config.paths.skills` (default `~/.agent-skills-mesh/skills`).
 - Configured sources (`local-dir`, `single-skill`, `git-repo`) are discovery/update inputs only; the SSOT installed store is not a normal discover source.
-- Agent skill directories are symlink-only distribution zones for ASM-managed skills. Managed symlinks must point to the SSOT path, not a source repo or local candidate path.
+- Agent skill directories are symlink-only distribution zones for ASM-managed skills. Managed links must point to the SSOT path, not a source repo or local candidate path. Link creation uses `createSymlink`: Windows creates junctions (`fs.symlink(..., "junction")`, no privilege required); POSIX creates symlinks (`"dir"`, type ignored). Both are reparse points detected by `lstat.isSymbolicLink()`; `readlink` results are normalized via `normalizeLinkTarget` (strip `\\?\` / `\\?\UNC\` prefix).
 - `state.json` is the source of installed-state truth: `ssotPath`, source metadata, `contentHash`, timestamps, and `enabledAgents`.
 - `config.toml` remains user intent; `index.json` remains generated scan facts. Do not persist installed-state truth in config or index.
-- Skill names used for filesystem paths must pass `assertSafeSkillName`: no path separators, whitespace, control/format characters, `.` or `..`.
+- Skill names used for filesystem paths must pass `assertSafeSkillName`: no path separators, whitespace, control/format characters, `.` or `..`, Windows-forbidden chars (`< > : " | ? *`), or Windows reserved names (`CON`/`PRN`/`AUX`/`NUL`/`COM1-9`/`LPT1-9`). Cross-platform uniform validation (Windows-strictest) so SSOT dir names are legal on any OS.
 - Any state-derived or user-derived filesystem target must pass containment checks before writing:
   - SSOT paths stay inside `config.paths.skills`.
   - Agent target paths equal the configured agent `skills_dir/<skillName>`.

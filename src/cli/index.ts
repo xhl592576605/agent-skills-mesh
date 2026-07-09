@@ -472,10 +472,10 @@ async function loadStores() {
 function printPlan(actions: InstallAction[], hasConflict: boolean, lang: Locale): void {
   console.log(hasConflict ? t("plan.titleConflict", lang) : t("plan.title", lang));
   for (const action of actions) {
-    if (action.type === "create-symlink") console.log(t("plan.createSymlink", lang, { agent: action.agentId, target: action.targetPath, link: action.linkTarget }));
+    if (action.type === "create-link") console.log(t("plan.createLink", lang, { agent: action.agentId, target: action.targetPath, link: action.linkTarget }));
     else if (action.type === "copy-to-ssot") console.log(t("plan.copyToSsot", lang, { source: action.sourcePath, target: action.targetPath }));
     else if (action.type === "update-state") console.log(t("plan.updateState", lang, { skillName: action.record.skillName }));
-    else if (action.type === "remove-symlink") console.log(t("plan.removeSymlink", lang, { agent: action.agentId, target: action.targetPath }));
+    else if (action.type === "remove-link") console.log(t("plan.removeLink", lang, { agent: action.agentId, target: action.targetPath }));
     else if (action.type === "skip") console.log(t("plan.skip", lang, { agent: action.agentId, target: action.targetPath ?? "", reason: action.reason }).trim());
     else if (action.type === "conflict") console.log(t("plan.conflict", lang, { agent: action.agentId, target: action.targetPath, reason: action.reason }).trim());
     else console.log(t("plan.repairBrokenLink", lang, { agent: action.agentId, target: action.targetPath }));

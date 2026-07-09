@@ -50,7 +50,9 @@ export type ErrorCode =
   // agent-service 业务错误（W1 补齐）
   | "AGENT_ID_INVALID"
   | "AGENT_ALREADY_EXISTS"
-  | "AGENT_BUILTIN_NO_REMOVE";
+  | "AGENT_BUILTIN_NO_REMOVE"
+  // safe-path 校验（跨平台 skill 名）
+  | "INVALID_SKILL_NAME";
 
 /**
  * 带 `code` / `params` 的 `Error`（非子类）。`params` 供 UI 层 `{{name}}` 插值翻译。

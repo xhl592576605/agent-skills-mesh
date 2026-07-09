@@ -74,13 +74,23 @@ function detectMacOSLanguage(): string | undefined {
   }
 }
 
+/** 读 Intl locale（Windows/通用）：`Intl.DateTimeFormat().resolvedOptions().locale` 返回如 `zh-CN`/`en-US`。弥补 Windows 无 `$LANG`。 */
+function detectIntlLocale(): string | undefined {
+  try {
+    const loc = Intl.DateTimeFormat().resolvedOptions().locale;
+    return loc || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * 读系统 locale：中文（`zh*`）→ `zh-CN`，否则 `en`。
  *
- * 优先级：`LC_ALL`/`LC_MESSAGES`（用户显式 locale 意图）> `LANG` > macOS `AppleLanguages`
- * （系统 GUI 语言）> `en`。macOS 特例：终端 `$LANG` 常与系统 GUI 语言不一致（被工具设为
- * `en_US.UTF-8` 但系统是中文），故当 `$LANG` 非中文时，额外读 `defaults read -g AppleLanguages`
- * 确认系统真实语言。
+ * 优先级：`LC_ALL`/`LC_MESSAGES`（用户显式 locale 意图）> `LANG` > `Intl`（Windows/通用）
+ * > macOS `AppleLanguages`（系统 GUI 语言）> `en`。macOS 特例：终端 `$LANG` 常与系统 GUI 语言
+ * 不一致（被工具设为 `en_US.UTF-8` 但系统是中文），故当 `$LANG` 非中文时，额外读
+ * `defaults read -g AppleLanguages` 确认系统真实语言。Windows 上 `$LANG` 常不存在，`Intl` 弥补。
  */
 export function detectSystemLocale(): Locale {
   // 1. 显式 locale 环境变量（用户明确意图）
@@ -89,10 +99,13 @@ export function detectSystemLocale(): Locale {
   // 2. LANG
   const lang = process.env.LANG || "";
   if (/^zh/i.test(lang)) return "zh-CN";
-  // 3. macOS：LANG 非中文时读系统 GUI 语言补充判断
+  // 3. Intl（Windows/通用，Node/Bun 基于 ICU）：弥补 Windows 无 $LANG
+  const intl = detectIntlLocale();
+  if (intl && /^zh/i.test(intl)) return "zh-CN";
+  // 4. macOS：LANG 非中文时读系统 GUI 语言补充判断
   const macLang = detectMacOSLanguage();
   if (macLang && /^zh/i.test(macLang)) return "zh-CN";
-  // 4. 回退
+  // 5. 回退
   return "en";
 }
 

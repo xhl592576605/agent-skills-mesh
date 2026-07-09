@@ -35,7 +35,7 @@ const ERR_CODES = Object.keys(dictEn)
 
 describe("bizError + i18n 字典链路（W1：每个 ErrorCode 可翻译）", () => {
   test("err code 数量符合预期（防意外删减：Phase B/W2 的 14 + W1 的 19）", () => {
-    expect(ERR_CODES).toHaveLength(33);
+    expect(ERR_CODES).toHaveLength(34);
   });
 
   test("en/zh 字典 err.* key 集合一致（完整性，AC7）", () => {

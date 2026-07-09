@@ -81,7 +81,7 @@ describe("install service", () => {
     cfg.sources[0].path = source;
     const stateStore = new StateStore(cfg.paths.home);
     const plan = await buildInstallPlan(cfg, indexWith(skill), "foo", "pi", await stateStore.read());
-    expect(plan.actions.map((action) => action.type)).toEqual(["copy-to-ssot", "create-symlink", "update-state"]);
+    expect(plan.actions.map((action) => action.type)).toEqual(["copy-to-ssot", "create-link", "update-state"]);
     await applyInstallPlan(plan, stateStore);
     expect((await fs.lstat(path.join(agentDir, "foo"))).isSymbolicLink()).toBe(true);
     expect(await fs.readlink(path.join(agentDir, "foo"))).toBe(path.join(cfg.paths.skills, "foo"));
@@ -115,7 +115,7 @@ describe("install service", () => {
     await applyInstallPlan(first, stateStore);
     const second = await buildInstallPlan(cfg, indexWith(skillRecord("foo", source)), "foo", "claude", await stateStore.read());
 
-    expect(second.actions.map((action) => action.type)).toEqual(["create-symlink", "update-state"]);
+    expect(second.actions.map((action) => action.type)).toEqual(["create-link", "update-state"]);
     await applyInstallPlan(second, stateStore);
     const state = await stateStore.read();
     expect(Object.keys(state.installedSkills.foo.enabledAgents).sort()).toEqual(["claude", "pi"]);
@@ -164,7 +164,7 @@ describe("install service", () => {
     await fs.symlink(source, path.join(agentDir, "foo"), "dir");
     const plan = await buildUninstallPlan(config(agentDir), "foo", "pi");
     expect(plan.hasConflict).toBe(false);
-    expect(plan.actions[0]).toMatchObject({ type: "remove-symlink" });
+    expect(plan.actions[0]).toMatchObject({ type: "remove-link" });
     await applyUninstallPlan(plan);
     await expect(fs.lstat(path.join(agentDir, "foo"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(fs.lstat(source)).resolves.toBeDefined();
