@@ -37,7 +37,7 @@ Agent Skills Mesh (`asm`) splits skill management into three layers — **where 
 ### Installation
 
 > [!NOTE]
-> `agent-skills-mesh@0.1.1` has been published to npm. The main package installs the matching standalone platform package via `optionalDependencies` (darwin-arm64 / darwin-x64 / linux-x64 / win32-x64).
+> `agent-skills-mesh@0.1.2` has been published to npm. The main package installs the matching standalone platform package via `optionalDependencies` (darwin-arm64 / darwin-x64 / linux-x64 / win32-x64).
 
 **npm global install (recommended)**
 

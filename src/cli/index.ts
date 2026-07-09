@@ -46,12 +46,13 @@ function preParseLang(): Locale {
   return resolveLanguage({ explicit: explicit ?? process.env.ASM_LANG, config: readConfigLangSync() });
 }
 const preLang = preParseLang();
+const cliVersion = process.env.ASM_VERSION ?? process.env.npm_package_version ?? "0.0.0";
 
 const program = new Command();
 program
   .name("asm")
   .description(t("cmd.program.desc", preLang))
-  .version("0.1.0")
+  .version(cliVersion)
   // 全局语言选项。commander v15 中 program 级 option 由 program.opts() 在子 command
   // 前/后任意位置统一捕获（实测），故无需在每个子 command 重复声明。
   .option("-L, --lang <lang>", t("cmd.lang.option", preLang));

@@ -37,7 +37,7 @@ Agent Skills Mesh（命令名 `asm`）把"技能**从哪来**、**存在哪**、
 ### 安装
 
 > [!NOTE]
-> `agent-skills-mesh@0.1.1` 已发布到 npm。主包会通过 `optionalDependencies` 自动安装当前平台的 standalone 子包（darwin-arm64 / darwin-x64 / linux-x64 / win32-x64）。
+> `agent-skills-mesh@0.1.2` 已发布到 npm。主包会通过 `optionalDependencies` 自动安装当前平台的 standalone 子包（darwin-arm64 / darwin-x64 / linux-x64 / win32-x64）。
 
 **npm 全局安装（推荐）**
 
@@ -198,7 +198,7 @@ enabled = true
 
 
 #### 功能
-- [x] ~~npm 跨平台平台包发布~~ — 已完成 `0.1.1`：主包 + darwin-arm64 / darwin-x64 / linux-x64 / win32-x64 平台子包已发布
+- [x] ~~npm 跨平台平台包发布~~ — 已完成 `0.1.2`：主包 + darwin-arm64 / darwin-x64 / linux-x64 / win32-x64 平台子包已发布
 - [ ] 补 TUI 集成测试（discover / doctor / install-plan 端到端）
 - [ ] render-smoke 自动化（CI 下 bun vitest pool + vite-plugin-solid）
 - [ ] skill 版本 diff 可视化（来源 vs SSOT）

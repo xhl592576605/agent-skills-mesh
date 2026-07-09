@@ -35,7 +35,7 @@
  * unnecessary in a standalone exe anyway.
  */
 import solidPlugin from "@opentui/solid/bun-plugin"
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { argv, env, exit } from "node:process"
@@ -76,12 +76,23 @@ async function fileMB(path: string): Promise<number> {
   return Math.round((s.size / 1024 / 1024) * 10) / 10
 }
 
+async function readPackageVersion(): Promise<string> {
+  const pkg = JSON.parse(await readFile(join(PROJECT_ROOT, "package.json"), "utf8"))
+  return pkg.version as string
+}
+
 async function buildOne(target: Target): Promise<void> {
   const dir = join(OUT_DIR, target.pkg)
   await mkdir(dir, { recursive: true })
   const outfile = join(dir, target.out)
 
   const startedAt = Date.now()
+  const version = await readPackageVersion()
+  const define: Record<string, string> = {
+    "process.env.ASM_VERSION": JSON.stringify(version)
+  }
+  if (target.musl) define["process.env.OPENTUI_LIBC"] = '"musl"'
+
   let result: any
   try {
     result = await Bun.build({
@@ -92,8 +103,8 @@ async function buildOne(target: Target): Promise<void> {
         target: target.bunTarget,
         outfile
       },
-      // Linux musl: tell OpenTUI native loader to pick the musl variant.
-      define: target.musl ? { "process.env.OPENTUI_LIBC": '"musl"' } : undefined
+      // Inject CLI version and, for Linux musl, tell OpenTUI native loader to pick the musl variant.
+      define
     })
   } catch (err) {
     // Bun.build 直接抛异常（如笼统的 "Bundle failed"）时 result.logs 不可用，

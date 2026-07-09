@@ -1,6 +1,6 @@
 {
   "name": "agent-skills-mesh",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "三层技能管理器：单一可信源 + symlink/junction 分发，统一管理所有 AI agent 的 skills",
   "type": "module",
   "license": "MIT",
@@ -38,10 +38,10 @@
     "registry": "https://registry.npmjs.org/"
   },
   "optionalDependencies": {
-    "agent-skills-mesh-darwin-arm64": "0.1.1",
-    "agent-skills-mesh-darwin-x64": "0.1.1",
-    "agent-skills-mesh-linux-x64": "0.1.1",
-    "agent-skills-mesh-win32-x64": "0.1.1"
+    "agent-skills-mesh-darwin-arm64": "0.1.2",
+    "agent-skills-mesh-darwin-x64": "0.1.2",
+    "agent-skills-mesh-linux-x64": "0.1.2",
+    "agent-skills-mesh-win32-x64": "0.1.2"
   },
   "devDependencies": {
     "@opentui/core": "^0.4.3",
