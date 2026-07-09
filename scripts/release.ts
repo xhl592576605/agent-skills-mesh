@@ -10,7 +10,7 @@
  *   主包 `bin/asm.js` 是 Node launcher；各平台子包 `agent-skills-mesh-<plat>` 含 standalone exe，
  *   经主包 optionalDependencies + 子包 os/cpu 声明，npm install 时自动只装匹配平台的一个。
  */
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { argv, exit } from "node:process"
 
@@ -73,7 +73,9 @@ async function assemblePlatformPackage(target: ReleaseTarget, version: string): 
   await mkdir(dir, { recursive: true })
 
   const srcExe = join(PROJECT_ROOT, "dist/standalone", target.build, target.exe)
-  await cp(srcExe, join(dir, target.exe))
+  const dstExe = join(dir, target.exe)
+  await cp(srcExe, dstExe)
+  await chmod(dstExe, 0o755)
 
   const pkgJson = {
     name: `agent-skills-mesh-${target.pkg}`,

@@ -37,22 +37,22 @@ Agent Skills Mesh (`asm`) splits skill management into three layers — **where 
 ### Installation
 
 > [!NOTE]
-> Cross-platform standalone packages are being published (macOS ready, Linux/Windows pending CI matrix). For now, install from source.
+> `agent-skills-mesh@0.1.1` has been published to npm. The main package installs the matching standalone platform package via `optionalDependencies` (darwin-arm64 / darwin-x64 / linux-x64 / win32-x64).
 
-**From source (currently available)**
-
-```bash
-git clone https://github.com/<your-org>/agent-skills-mesh.git
-cd agent-skills-mesh
-bun install            # requires Bun 1.3+
-bun run src/cli/index.ts --help
-```
-
-**npm global install (once platform packages are published)**
+**npm global install (recommended)**
 
 ```bash
 npm i -g agent-skills-mesh
 asm --help
+```
+
+**From source for development**
+
+```bash
+git clone https://github.com/xhl592576605/agent-skills-mesh.git
+cd agent-skills-mesh
+bun install            # requires Bun 1.3+
+bun run src/cli/index.ts --help
 ```
 
 ### Quick Start

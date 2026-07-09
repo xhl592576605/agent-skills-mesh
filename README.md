@@ -37,22 +37,22 @@ Agent Skills Mesh（命令名 `asm`）把"技能**从哪来**、**存在哪**、
 ### 安装
 
 > [!NOTE]
-> 跨平台 standalone 平台包正在发布中（macOS 已就绪，Linux/Windows 待 CI matrix 实测）。当前推荐从源码安装。
+> `agent-skills-mesh@0.1.1` 已发布到 npm。主包会通过 `optionalDependencies` 自动安装当前平台的 standalone 子包（darwin-arm64 / darwin-x64 / linux-x64 / win32-x64）。
 
-**从源码（当前可用）**
-
-```bash
-git clone https://github.com/<your-org>/agent-skills-mesh.git
-cd agent-skills-mesh
-bun install            # 需 Bun 1.3+
-bun run src/cli/index.ts --help
-```
-
-**npm 全局安装（平台包发布后）**
+**npm 全局安装（推荐）**
 
 ```bash
 npm i -g agent-skills-mesh
 asm --help
+```
+
+**从源码开发**
+
+```bash
+git clone https://github.com/xhl592576605/agent-skills-mesh.git
+cd agent-skills-mesh
+bun install            # 需 Bun 1.3+
+bun run src/cli/index.ts --help
 ```
 
 ### 快速开始
@@ -198,7 +198,7 @@ enabled = true
 
 
 #### 功能
-- [ ] npm 跨平台平台包发布（macOS 已就绪，Linux/Windows 待 CI matrix 实测 native 二进制）
+- [x] ~~npm 跨平台平台包发布~~ — 已完成 `0.1.1`：主包 + darwin-arm64 / darwin-x64 / linux-x64 / win32-x64 平台子包已发布
 - [ ] 补 TUI 集成测试（discover / doctor / install-plan 端到端）
 - [ ] render-smoke 自动化（CI 下 bun vitest pool + vite-plugin-solid）
 - [ ] skill 版本 diff 可视化（来源 vs SSOT）
