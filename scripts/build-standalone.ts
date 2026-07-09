@@ -82,17 +82,29 @@ async function buildOne(target: Target): Promise<void> {
   const outfile = join(dir, target.out)
 
   const startedAt = Date.now()
-  const result = await Bun.build({
-    entrypoints: [ENTRYPOINT],
-    target: "bun",
-    plugins: [solidPlugin],
-    compile: {
-      target: target.bunTarget,
-      outfile
-    },
-    // Linux musl: tell OpenTUI native loader to pick the musl variant.
-    define: target.musl ? { "process.env.OPENTUI_LIBC": '"musl"' } : undefined
-  })
+  let result: any
+  try {
+    result = await Bun.build({
+      entrypoints: [ENTRYPOINT],
+      target: "bun",
+      plugins: [solidPlugin],
+      compile: {
+        target: target.bunTarget,
+        outfile
+      },
+      // Linux musl: tell OpenTUI native loader to pick the musl variant.
+      define: target.musl ? { "process.env.OPENTUI_LIBC": '"musl"' } : undefined
+    })
+  } catch (err) {
+    // Bun.build 直接抛异常（如笼统的 "Bundle failed"）时 result.logs 不可用，
+    // 打印完整 err 以便定位（CI 上 linux-x64 曾只报 "Bundle failed" 无详情）。
+    console.error(`=== Bun.build threw for ${target.pkg} ===`)
+    console.error("message:", err instanceof Error ? err.message : String(err))
+    if (err instanceof Error && err.stack) console.error("stack:", err.stack)
+    const cause = (err as { cause?: unknown }).cause
+    if (cause !== undefined) console.error("cause:", cause)
+    throw new Error(`build failed for ${target.pkg}: ${err instanceof Error ? err.message : String(err)}`)
+  }
 
   if (!result.success) {
     // Print build logs to stderr
