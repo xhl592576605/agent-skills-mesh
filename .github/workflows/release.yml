@@ -63,19 +63,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
+      # build job 上传的每个 artifact（asm-<plat>/asm[.exe]）下载到 artifacts/<name>/。
+      # 暂存到 release.ts 期望的 dist/standalone/<plat>/asm[.exe]，供 --skip-build 组装子包。
+      - name: Stage artifacts to dist/standalone
+        shell: bash
+        run: |
+          set -e
+          for plat in darwin-arm64 darwin-x64 linux-x64 win32-x64; do
+            mkdir -p "dist/standalone/$plat"
+          done
+          mv artifacts/asm-darwin-arm64/asm  dist/standalone/darwin-arm64/asm
+          mv artifacts/asm-darwin-x64/asm    dist/standalone/darwin-x64/asm
+          mv artifacts/asm-linux-x64/asm     dist/standalone/linux-x64/asm
+          mv artifacts/asm-win32-x64/asm.exe dist/standalone/win32-x64/asm.exe
+          echo "=== staged dist/standalone ==="
+          ls -R dist/standalone
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Publish
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          bun run scripts/release.ts publish
         shell: bash
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          bun run scripts/release.ts --skip-build --publish
