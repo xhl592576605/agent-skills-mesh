@@ -37,13 +37,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        # 用 pnpm 而非 bun install：pnpm 读 pnpm-workspace.yaml 的 supportedArchitectures，
+        # 装齐 darwin/linux/win32 多平台 native，供 Bun.build 交叉编译各 target。
+        run: pnpm install --frozen-lockfile
 
       - name: Build ${{ matrix.platform }}
         run: bun run scripts/build-standalone.ts ${{ matrix.platform }}
