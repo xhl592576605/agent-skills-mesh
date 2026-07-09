@@ -93,10 +93,20 @@ jobs:
           echo "=== staged dist/standalone ==="
           ls -R dist/standalone
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.13"
+
+      - name: Install dependencies
+        # pnpm 安装 @opentui/core 的 peerDependencies（含 @babel/traverse），确保 Bun
+        # 运行 release.ts 时 babel runtime 正常工作（避免 "_debug is not a function" 坑）。
+        run: pnpm install --frozen-lockfile
 
       - name: Publish
         env:
