@@ -106,7 +106,9 @@ jobs:
       - name: Install dependencies
         # pnpm 安装 @opentui/core 的 peerDependencies（含 @babel/traverse），确保 Bun
         # 运行 release.ts 时 babel runtime 正常工作（避免 "_debug is not a function" 坑）。
-        run: pnpm install --frozen-lockfile
+        # --no-frozen-lockfile：发布当下 agent-skills-mesh-* 新版本尚未存在于 npm，
+        # frozen 校验会因 optionalDependencies 与 lockfile 暂时不一致而失败。
+        run: pnpm install --no-frozen-lockfile
 
       - name: Publish
         env:
