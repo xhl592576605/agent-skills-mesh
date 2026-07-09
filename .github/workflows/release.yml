@@ -50,7 +50,10 @@ jobs:
       - name: Install dependencies
         # 用 pnpm 而非 bun install：pnpm 读 pnpm-workspace.yaml 的 supportedArchitectures，
         # 装齐 darwin/linux/win32 多平台 native，供 Bun.build 交叉编译各 target。
-        run: pnpm install --frozen-lockfile
+        # --no-frozen-lockfile：optionalDependencies 的 agent-skills-mesh-* 子包尚未发布（npm 404），
+        # pnpm 无法写入 lockfile 致 frozen 校验失败；首次发布需放宽（optional 404 不阻断安装）。
+        # 子包上线后，本地重新 install 生成含子包的 lockfile 并提交，即可改回 --frozen-lockfile。
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build ${{ matrix.platform }}
         run: bun run scripts/build-standalone.ts ${{ matrix.platform }}
