@@ -95,10 +95,13 @@ async function buildOne(target: Target): Promise<void> {
   })
 
   if (!result.success) {
-    const messages = result.logs
-      .map((log) => (typeof log === "string" ? log : log.message))
-      .join("\n")
-    throw new Error(`build failed for ${target.pkg}:\n${messages}`)
+    // Print build logs to stderr
+    for (const log of result.logs) {
+      const msg = typeof log === "string" ? log : log.message
+      console.error(msg)
+    }
+    console.error("=== Build failed for", target.pkg, "===")
+    throw new Error(`build failed for ${target.pkg}`)
   }
 
   const mb = await fileMB(outfile)
@@ -125,7 +128,8 @@ async function runCleanWorker(): Promise<number> {
       cmd: ["bun", "run", SCRIPT_PATH, ...argv.slice(2)],
       cwd: workerCwd,
       env: { ...env, [CLEAN_FLAG]: "1" },
-      stdio: ["inherit", "inherit", "inherit"]
+      stdout: Bun.stdout,
+      stderr: Bun.stderr
     })
     return await child.exited
   } finally {
@@ -169,6 +173,7 @@ async function buildAll(): Promise<void> {
 async function main(): Promise<void> {
   // Worker phase: run the actual builds in a bunfig-free cwd.
   if (env[CLEAN_FLAG] === "1") {
+    console.error("Worker mode: argv =", argv)
     await buildAll()
     return
   }
@@ -176,6 +181,7 @@ async function main(): Promise<void> {
   // Launcher phase: hand off to a clean worker.
   console.log("launching clean build worker (temp cwd, no bunfig preload)...")
   const code = await runCleanWorker()
+  console.error("Worker exited with code:", code)
   exit(code)
 }
 

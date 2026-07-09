@@ -1,36 +1,57 @@
 {
   "name": "agent-skills-mesh",
   "version": "0.1.0",
+  "description": "三层技能管理器：单一可信源 + symlink/junction 分发，统一管理所有 AI agent 的 skills",
   "type": "module",
+  "license": "MIT",
+  "author": "xuhuale",
+  "keywords": [
+    "ai",
+    "agent",
+    "skills",
+    "cli",
+    "tui",
+    "claude",
+    "codex",
+    "cursor",
+    "symlink",
+    "opentui"
+  ],
   "bin": {
-    "asm": "./bin/asm.js"
+    "asm": "bin/asm.js"
   },
+  "files": [
+    "bin",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "bun run scripts/build-standalone.ts",
+    "release": "bun run scripts/release.ts",
     "test": "vitest run",
     "dev": "bun run src/cli/index.ts"
   },
-  "dependencies": {
-    "@opentui/core": "^0.4.3",
-    "@opentui/keymap": "^0.4.3",
-    "@opentui/solid": "^0.4.3",
-    "commander": "^15.0.0",
-    "gray-matter": "^4.0.3",
-    "solid-js": "^1.9.14"
-  },
-  "devDependencies": {
-    "@types/node": "^24.0.0",
-    "typescript": "^5.8.0",
-    "vitest": "^3.2.0"
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "optionalDependencies": {
     "agent-skills-mesh-darwin-arm64": "0.1.0",
     "agent-skills-mesh-darwin-x64": "0.1.0",
-    "agent-skills-mesh-linux-arm64": "0.1.0",
     "agent-skills-mesh-linux-x64": "0.1.0",
-    "agent-skills-mesh-linux-arm64-musl": "0.1.0",
-    "agent-skills-mesh-linux-x64-musl": "0.1.0",
     "agent-skills-mesh-win32-x64": "0.1.0"
+  },
+  "devDependencies": {
+    "@opentui/core": "^0.4.3",
+    "@opentui/keymap": "^0.4.3",
+    "@opentui/solid": "^0.4.3",
+    "@types/node": "^24.0.0",
+    "commander": "^15.0.0",
+    "gray-matter": "^4.0.3",
+    "solid-js": "^1.9.14",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
   }
 }

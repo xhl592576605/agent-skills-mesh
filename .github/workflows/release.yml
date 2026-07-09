@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            os: macos-latest
+            arch: arm64
+            bundler: bun
+          - platform: darwin-x64
+            os: macos-latest
+            arch: x64
+            bundler: bun
+          - platform: linux-x64
+            os: ubuntu-latest
+            arch: x64
+            bundler: bun
+          - platform: win32-x64
+            os: windows-latest
+            arch: x64
+            bundler: bun
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build ${{ matrix.platform }}
+        run: bun run scripts/build-standalone.ts ${{ matrix.platform }}
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: asm-${{ matrix.platform }}
+          path: dist/standalone/${{ matrix.platform }}/asm${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+
+  publish:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          bun run scripts/release.ts publish
+        shell: bash

@@ -1,2 +1,8 @@
 allowBuilds:
   esbuild: true
+
+# 跨平台构建：安装 darwin/linux/win32 的 x64/arm64 平台 native
+# （如 @opentui/core 的平台子包），供 Bun.build({ compile }) 交叉编译 standalone 可执行文件。
+supportedArchitectures:
+  os: [current, darwin, linux, win32]
+  cpu: [current, x64, arm64]
