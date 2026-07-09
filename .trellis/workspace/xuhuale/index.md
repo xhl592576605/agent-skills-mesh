@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
+- **Total Sessions**: 12
 - **Last Active**: 2026-07-09
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~420 | Active |
+| `journal-1.md` | ~453 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 12 | 2026-07-09 | 跨平台兼容性修复（junction 方案） | `937ef10` | `main` |
 | 11 | 2026-07-09 | TUI 样式重设计：DataTable 封装 + 蒙层 CJK bug 修复 + 键位调整 | `1edb57b` | `main` |
 | 10 | 2026-07-07 | TUI 按键交互统一（space 切换 / enter 确认） | `1170dcc` | `main` |
 | 9 | 2026-07-07 | i18n 中英文双语切换 + 布局适配 | `652bf55` | `main` |

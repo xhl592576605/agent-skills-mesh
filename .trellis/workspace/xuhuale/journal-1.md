@@ -418,3 +418,36 @@ Implemented strict ASM private SSOT skill installs with state.json, SSOT symlink
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: 跨平台兼容性修复（junction 方案）
+
+**Date**: 2026-07-09
+**Task**: 跨平台兼容性修复（junction 方案）
+**Branch**: `main`
+
+### Summary
+
+Windows 用 junction（无需特权）/ POSIX 用 symlink 统一软连接（createSymlink 平台分支），撤销初版 copy 回退；readlink normalizeLinkTarget 规范化 \\?\ 前缀；samePath 平台大小写（win32/darwin 不敏感）；skill 名 Windows 非法字符+保留名校验（INVALID_SKILL_NAME bizError）；Windows locale 检测（Intl API）；install-plan action create-symlink→create-link。单元测试 427 绿，Windows 真机基础功能（init/enable/doctor）验证通过，junction 无需特权创建成功。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `937ef10` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
