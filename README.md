@@ -205,6 +205,12 @@ enabled = true
 - [ ] 更多来源类型（OCI / zip 归档）
 - [ ] 配置导入/导出 + 团队共享
 
+## 🎉 致谢
+
+本项目在 [LINUX DO](https://linux.do/) 社区推广，感谢 LINUX DO 社区对开源项目的支持与认可。
+
+---
+
 ### License
 
 MIT
