@@ -451,3 +451,37 @@ Windows 用 junction（无需特权）/ POSIX 用 symlink 统一软连接（crea
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: TUI 更新提示与自动检查
+
+**Date**: 2026-07-15
+**Task**: TUI 更新提示与自动检查
+**Branch**: `main`
+
+### Summary
+
+完成 source/skill 自动更新检测、红色更新标记、详情与状态提示、单项及批量更新流程，并准备 v0.2.0 发布。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d0cbb6d` | (see git log) |
+| `8ae185d` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
