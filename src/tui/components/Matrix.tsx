@@ -9,6 +9,10 @@ import {
   installationKey
 } from "../state/projection.js"
 import { type TranslateFn } from "../context/i18n.js"
+import {
+  formatUpdateIndicatorHeader,
+  formatUpdateIndicatorName
+} from "../state/update-indicator.js"
 import { DataTable, type Column } from "./DataTable.js"
 
 /**
@@ -28,6 +32,8 @@ export interface MatrixProps {
   nameWidth?: number
   cellWidth?: number
   viewport: number
+  /** 维度2：可更新到 SSOT 的 skill name 集合（name 列加红点）。 */
+  updatable?: Set<string>
 }
 
 export function Matrix(props: MatrixProps) {
@@ -41,12 +47,21 @@ export function Matrix(props: MatrixProps) {
     const cols: Column<SkillRecord>[] = [
       {
         key: "name",
-        header: props.t("table.name"),
+        header: formatUpdateIndicatorHeader(props.t("table.name")),
         width: nameWidth(),
-        render: (skill, ctx) => ({
-          text: skill.name,
-          fg: ctx.isCursorRow ? theme.text : theme.textMuted
-        })
+        render: (skill, ctx) => {
+          const content = formatUpdateIndicatorName(
+            skill.name,
+            props.updatable?.has(skill.name) ?? false
+          )
+          return {
+            text: content.text,
+            segments: [
+              { text: content.marker, fg: theme.danger },
+              { text: content.name, fg: ctx.isCursorRow ? theme.text : theme.textMuted }
+            ]
+          }
+        }
       }
     ]
     props.columns.forEach((agentCol, colIdx) => {

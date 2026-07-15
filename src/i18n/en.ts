@@ -60,6 +60,8 @@ export const dict = {
   "common.errorLine": "Error: {{message}}",
   "common.name": "Name",
   "common.esc": "esc",
+  "common.pulling": "⠋ Pulling...",
+  "common.updating": "⠋ Updating...",
 
   "header.total": "items",
   "header.errors": "errors",
@@ -76,6 +78,8 @@ export const dict = {
   "status.disabled": "disabled",
   "status.upToDate": "up-to-date",
   "status.updatable": "updatable: {{list}}",
+  "status.sourcesUpdatable": "* {{count}} source(s) have updates, press u to pull",
+  "status.skillsUpdatable": "* {{count}} skill(s) updatable to SSOT, press u to update",
 
   // === 按钮 label（ConfirmDialog 等默认值 + 显式传入）===
   "btn.confirm": "confirm",
@@ -107,6 +111,7 @@ export const dict = {
   "hint.moveV": "↑↓ move",
   "hint.add": "a add",
   "hint.update": "u update",
+  "hint.updateAll": "U update-all",
   "hint.remove": "d remove",
   "hint.enDis": "e/x en/dis",
   "hint.detail": "enter detail",
@@ -123,7 +128,7 @@ export const dict = {
   "help.globalLine": "1/2/3 tabs · ctrl+r refresh · L lang · ? help · esc/ctrl+c exit",
   "help.skillSection": "skill×agent",
   "help.skillLine":
-    "↑↓←→/hjkl move · space toggle · a row-on · d delete · enter review · i info · A agents (space toggle · a add) · / search",
+    "↑↓←→/hjkl move · space toggle · a row-on · d delete · u update · U update-all · enter review · i info · A agents (space toggle · a add) · / search",
   "help.sourceSection": "source",
   "help.sourceLine": "a add · u update · d remove · e/x enable/disable · enter detail",
   "help.doctorSection": "doctor",
@@ -234,6 +239,8 @@ export const dict = {
   "prompt.footer": "return confirm · backspace delete · esc cancel",
   "select.footer": "↑↓ move · return select · esc cancel",
   "multiSelect.footer": "↑↓ move · space toggle · i view md · return add · esc cancel",
+  "multiSelect.footerWithUpdate": "↑↓ move · space toggle · i view md · u update · return add · esc cancel",
+  "multiSelect.updateRequiresInstalled": "This skill is not installed; select it and press return to add it first",
 
   // === TUI AddAgentDialog（PromptDialog 标题/占位）===
   "addAgent.titleId": "Add agent — id",
@@ -280,12 +287,21 @@ export const dict = {
   "skillDetail.addFailed": "Add failed",
   "skillDetail.footerInstalled": "u update · d remove · b rebind ·",
   "skillDetail.footerAdd": "+ add ·",
+  "skillDetail.updatable": "Updatable to SSOT (press u)",
+  "skillDetail.upToDate": "Up to date",
 
   // === TUI SkillAgentView（tab 1）===
   "skillView.deleteTitle": "Delete skill?",
   "skillView.deleteMsg": "{{name}}\ndelete from SSOT + detach all agent symlinks",
   "skillView.deleted": "deleted skill {{name}}",
   "skillView.deleteFail": "delete failed: {{message}}",
+  "skillView.updated": "updated skill {{name}}",
+  "skillView.updateFail": "update failed: {{message}}",
+  "skillView.noUpdates": "no skills have updates",
+  "skillView.updateAllTitle": "Update all available skills?",
+  "skillView.updateAllMsg": "Update {{count}} skill(s) to the latest SSOT source content",
+  "skillView.updatedAll": "updated all {{count}} skill(s)",
+  "skillView.updatedAllPartial": "batch update complete: {{ok}} succeeded, {{failed}} failed ({{list}})",
   "skillView.applyTitle": "Apply pending changes?",
   "skillView.summaryTotal": "{{installs}} install / {{uninstalls}} uninstall",
   "skillView.summaryRow": "{{skill}}: {{parts}}",

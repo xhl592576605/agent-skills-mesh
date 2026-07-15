@@ -30,6 +30,10 @@ export interface SkillAgentKeyDeps {
   onInfo?: () => void | Promise<void>
   /** 按下 `d` 删除当前 skill（从 SSOT 移除 + 断所有 agent symlink）。可选：未注入时 fallthrough。 */
   onDeleteSkill?: (skillName: string) => void | Promise<void>
+  /** 按下 `u` 更新当前 skill 到 SSOT 最新版（源有新版时）。可选：未注入时 fallthrough。 */
+  onUpdate?: (skillName: string) => void | Promise<void>
+  /** 按下 `U` 更新全部可更新的已安装 skill。可选：未注入时 fallthrough。 */
+  onUpdateAll?: () => void | Promise<void>
   /** 按下 `A`（shift+a）打开 agent 管理弹窗（Manage agents：启停/添加）。可选：未注入时 fallthrough。 */
   onManageAgents?: () => void
 }
@@ -117,6 +121,23 @@ export function handleMatrixKey(deps: SkillAgentKeyDeps, key: KeyEvent): boolean
     if (deps.onDeleteSkill) {
       const skill = deps.rows()[deps.matrix.cursor().row]
       if (skill) void deps.onDeleteSkill(skill.name)
+      return true
+    }
+    return false
+  }
+  // `U` 更新全部可更新 skill；必须先于小写 `u` 判断，避免 shift 事件被单项更新吞掉。
+  if (k === "u" && key.shift) {
+    if (deps.onUpdateAll) {
+      void deps.onUpdateAll()
+      return true
+    }
+    return false
+  }
+  // `u` 更新当前 skill 到 SSOT 最新版；未注入 onUpdate 时 fallthrough。
+  if (k === "u" && !key.shift) {
+    if (deps.onUpdate) {
+      const skill = deps.rows()[deps.matrix.cursor().row]
+      if (skill) void deps.onUpdate(skill.name)
       return true
     }
     return false

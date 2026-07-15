@@ -11,6 +11,7 @@ import { IndexStore } from "../../core/storage/index-store.js"
 import { StateStore } from "../../core/storage/state-store.js"
 import { skillAdd, skillRebind, skillRemove, skillUpdate } from "../../core/services/skill-service.js"
 import { refreshIndex } from "../../core/services/refresh-service.js"
+import { isSkillUpdatable } from "../../core/services/update-check-service.js"
 import { ConfirmDialog } from "./ConfirmDialog.js"
 import { SelectDialog } from "./SelectDialog.js"
 
@@ -48,6 +49,12 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
   const rebindSources = createMemo(() => {
     const s = skill()
     return s ? Array.from(new Set(s.candidates.map((c) => c.sourceId))) : []
+  })
+
+  /** 维度2：installed skill 是否可更新到 SSOT（源有新版）。 */
+  const updatable = createMemo(() => {
+    const r = installed()
+    return r ? isSkillUpdatable(r) : false
   })
 
   useKeyboard((key) => {
@@ -190,9 +197,12 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
   return (
     <box flexDirection="column" gap={1}>
       <box flexDirection="row" justifyContent="space-between">
-        <text fg={theme.text} attributes={TextAttributes.BOLD}>
-          {props.skillName}
-        </text>
+        <box flexDirection="row" alignItems="center">
+          <Show when={updatable()}>
+            <text fg={theme.danger} attributes={TextAttributes.BOLD}>* </text>
+          </Show>
+          <text fg={theme.text} attributes={TextAttributes.BOLD}>{props.skillName}</text>
+        </box>
         <text fg={theme.textMuted}>esc</text>
       </box>
 
@@ -231,6 +241,9 @@ export function SkillDetailDialog(props: ParentProps<SkillDetailDialogProps>) {
           </text>
           <text fg={theme.textMuted} wrapMode="none">
             {i18n.t("detail.hash")} {installed()!.contentHash.slice(0, 12)}
+          </text>
+          <text fg={updatable() ? theme.danger : theme.success}>
+            {updatable() ? i18n.t("skillDetail.updatable") : i18n.t("skillDetail.upToDate")}
           </text>
           <text fg={theme.textMuted}>
             {i18n.t("detail.agents")} {Object.keys(installed()!.enabledAgents).join(", ") || i18n.t("detail.noAgents")}

@@ -4,6 +4,7 @@ import { ConfigStore } from "../../core/storage/config-store.js"
 import { IndexStore } from "../../core/storage/index-store.js"
 import { StateStore } from "../../core/storage/state-store.js"
 import { refreshIndex } from "../../core/services/refresh-service.js"
+import { checkSkillUpdates, checkSources } from "../../core/services/update-check-service.js"
 import { bizError } from "../../core/errors.js"
 import type { AppConfig } from "../../core/models/config.js"
 import type { IndexFile } from "../../core/models/index.js"
@@ -22,6 +23,8 @@ export interface DataSnapshot {
   state: StateFile | null
   loading: boolean
   error: Error | null
+  /** 进入 TUI 自动检查更新进行中（后台异步，不阻塞交互）。 */
+  checking: boolean
 }
 
 export interface DataContextValue {
@@ -30,6 +33,8 @@ export interface DataContextValue {
   refresh: () => Promise<void>
   /** 重新从磁盘读 config/state/index（外部修改后用）。 */
   reload: () => Promise<void>
+  /** 全量检测维度1+维度2，写 state 并刷新快照（进入 TUI 时后台调用）。 */
+  checkUpdates: () => Promise<void>
 }
 
 const DataContext = createContext<DataContextValue>()
@@ -40,7 +45,8 @@ export function DataProvider(props: ParentProps) {
     index: null,
     state: null,
     loading: true,
-    error: null
+    error: null,
+    checking: false
   })
 
   // store 实例在 Provider 生命周期内复用（与 cli/index.ts loadStores 同款）。
@@ -95,11 +101,30 @@ export function DataProvider(props: ParentProps) {
     await load()
   }
 
+  /**
+   * 全量检测维度1（source 有更新）+ 维度2（skill 与 SSOT 有差异），写回 state 并刷新快照。
+   * 进入 TUI 时后台异步调用，不阻塞渲染；检测失败静默降级（单 source 失败不阻断）。
+   */
+  async function checkUpdates() {
+    if (!snapshot.config) return
+    setSnapshot("checking", true)
+    try {
+      await checkSources(configStore, stateStore)
+      await checkSkillUpdates(configStore, stateStore)
+      const state = await stateStore.read()
+      setSnapshot("state", state)
+    } catch {
+      // 检测失败不设全局 error：降级为「无标记」，不影响主流程。
+    } finally {
+      setSnapshot("checking", false)
+    }
+  }
+
   onMount(() => {
-    void load()
+    void load().then(() => checkUpdates())
   })
 
-  const value: DataContextValue = { snapshot, refresh, reload }
+  const value: DataContextValue = { snapshot, refresh, reload, checkUpdates }
 
   return <DataContext.Provider value={value}>{props.children}</DataContext.Provider>
 }

@@ -31,7 +31,8 @@ export class StateStore {
     const parsed = JSON.parse(await fs.readFile(this.statePath, "utf8")) as Partial<StateFile>;
     return {
       version: 1,
-      installedSkills: parsed.installedSkills ?? {}
+      installedSkills: parsed.installedSkills ?? {},
+      sourceSnapshots: parsed.sourceSnapshots ?? {}
     };
   }
 

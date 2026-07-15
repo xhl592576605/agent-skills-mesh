@@ -113,3 +113,70 @@ describe("config.language field", () => {
     expect(config.settings.language).toBe("auto");
   });
 });
+
+describe("state sourceSnapshots & sourceHash", () => {
+  test("round-trips sourceSnapshots", async () => {
+    const home = await tempDir();
+    const stateStore = new StateStore(home);
+    const state = await stateStore.init();
+    state.sourceSnapshots = {
+      "src-1": { fingerprint: "abc123", hasUpdate: true, checkedAt: "2026-07-15T00:00:00.000Z" }
+    };
+    await stateStore.write(state);
+    const read = await stateStore.read();
+    expect(read.sourceSnapshots).toEqual(state.sourceSnapshots);
+  });
+
+  test("round-trips sourceHash on an installed skill", async () => {
+    const home = await tempDir();
+    const stateStore = new StateStore(home);
+    const state = await stateStore.init();
+    state.installedSkills.foo = {
+      skillName: "foo",
+      displayName: "foo",
+      tags: [],
+      ssotPath: path.join(home, "skills/foo"),
+      source: {
+        kind: "configured-source",
+        sourceId: "s1",
+        sourceType: "git-repo",
+        sourcePath: "/tmp/s1",
+        relativePath: "foo"
+      },
+      contentHash: "c1",
+      sourceHash: "s2",
+      installedAt: "2026-07-15T00:00:00.000Z",
+      updatedAt: "2026-07-15T00:00:00.000Z",
+      enabledAgents: {}
+    };
+    await stateStore.write(state);
+    const read = await stateStore.read();
+    expect(read.installedSkills.foo?.sourceHash).toBe("s2");
+  });
+
+  test("legacy state without sourceSnapshots defaults to {}", async () => {
+    const home = await tempDir();
+    const stateStore = new StateStore(home);
+    // 模拟旧 state：无 sourceSnapshots 字段，installed skill 无 sourceHash
+    const legacy = {
+      version: 1,
+      installedSkills: {
+        foo: {
+          skillName: "foo",
+          displayName: "foo",
+          tags: [],
+          ssotPath: "/tmp/foo",
+          source: { kind: "manual-import" },
+          contentHash: "c1",
+          installedAt: "2026-07-15T00:00:00.000Z",
+          updatedAt: "2026-07-15T00:00:00.000Z",
+          enabledAgents: {}
+        }
+      }
+    };
+    await fs.writeFile(stateStore.statePath, JSON.stringify(legacy), "utf8");
+    const read = await stateStore.read();
+    expect(read.sourceSnapshots).toEqual({});
+    expect(read.installedSkills.foo?.sourceHash).toBeUndefined();
+  });
+});

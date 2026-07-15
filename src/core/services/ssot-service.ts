@@ -95,6 +95,7 @@ export async function createInstalledRecordFromCandidate(config: AppConfig, cand
   const ssotPath = getSsotSkillPath(config, candidate.skillName);
   const metadata = await readSkillMetadata(ssotPath, candidate.skillName);
   const now = new Date().toISOString();
+  const contentHash = await sha256Directory(ssotPath);
   return {
     skillName: candidate.skillName,
     displayName: metadata.displayName,
@@ -102,7 +103,8 @@ export async function createInstalledRecordFromCandidate(config: AppConfig, cand
     tags: metadata.tags,
     ssotPath,
     source: installedSourceFromCandidate(source, candidate),
-    contentHash: await sha256Directory(ssotPath),
+    contentHash,
+    sourceHash: contentHash, // add 时源与 SSOT 一致（无维度2差异）
     installedAt: existing?.installedAt ?? now,
     updatedAt: now,
     enabledAgents: existing?.enabledAgents ?? {}

@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-import { gitClone, gitPullFfOnly } from "../src/utils/git.js";
+import { gitClone, gitFetch, gitPullFfOnly, gitRevParse } from "../src/utils/git.js";
 import { pathExists } from "../src/utils/fs.js";
 
 const execFileAsync = promisify(execFile);
@@ -101,5 +101,51 @@ describe("git utils", () => {
   test("gitPullFfOnly throws on a non-git directory", async () => {
     const notARepo = await tempDir("asm-git-nogit-");
     await expect(gitPullFfOnly(notARepo)).rejects.toThrow(/pull --ff-only/);
+  });
+
+  test("gitFetch is a no-op (no throw) when up-to-date", async () => {
+    const remote = await makeRemoteRepo();
+    const work = await tempDir("asm-git-fetch-");
+    await gitClone(remote, work);
+    await expect(gitFetch(work)).resolves.toBeUndefined();
+  });
+
+  test("gitFetch throws on a non-git directory", async () => {
+    const notARepo = await tempDir("asm-git-fetch-nogit-");
+    await expect(gitFetch(notARepo)).rejects.toThrow(/fetch failed/);
+  });
+
+  test("gitRevParse returns the HEAD commit SHA", async () => {
+    const remote = await makeRemoteRepo();
+    const work = await tempDir("asm-git-rev-");
+    await gitClone(remote, work);
+    const head = await gitRevParse(work, "HEAD");
+    expect(head).toMatch(/^[0-9a-f]{40}$/);
+    // 刚 clone，upstream 与本地 HEAD 一致
+    const upstream = await gitRevParse(work, "@{u}");
+    expect(upstream).toBe(head);
+  });
+
+  test("gitRevParse detects remote-ahead after a new remote commit + fetch", async () => {
+    const remote = await makeRemoteRepo();
+    const work = await tempDir("asm-git-ahead-");
+    await gitClone(remote, work);
+    const localHead = await gitRevParse(work, "HEAD");
+
+    // remote 新提交
+    await fs.writeFile(path.join(remote, "my-skill", "SKILL.md"), "---\nname: my-skill\n---\nv2\n", "utf8");
+    await gitIn(["add", "."], remote);
+    await commitIn(remote, "v2");
+    await gitFetch(work);
+
+    const upstream = await gitRevParse(work, "@{u}");
+    expect(upstream).not.toBe(localHead); // 远端领先于本地
+  });
+
+  test("gitRevParse throws on an invalid ref", async () => {
+    const remote = await makeRemoteRepo();
+    const work = await tempDir("asm-git-revbad-");
+    await gitClone(remote, work);
+    await expect(gitRevParse(work, "no-such-ref")).rejects.toThrow(/rev-parse/);
   });
 });

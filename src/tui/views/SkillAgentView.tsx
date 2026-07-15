@@ -1,5 +1,5 @@
 import { useTerminalDimensions } from "@opentui/solid"
-import { Show, createEffect, createSignal, onCleanup, onMount } from "solid-js"
+import { Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { useTheme } from "../context/theme.js"
 import { useI18n } from "../context/i18n.js"
 import { useData } from "../context/data.js"
@@ -14,7 +14,8 @@ import {
   buildUninstallPlan
 } from "../../core/services/install-service.js"
 import { ConfirmDialog } from "../dialogs/ConfirmDialog.js"
-import { skillRemove } from "../../core/services/skill-service.js"
+import { skillRemove, skillUpdate } from "../../core/services/skill-service.js"
+import { listUpdatableSkillNames } from "../../core/services/update-check-service.js"
 import { errorMessage } from "../../i18n/index.js"
 import { SkillDetailDialog } from "../dialogs/SkillDetailDialog.js"
 import { AgentManagerDialog } from "../dialogs/AgentManagerDialog.js"
@@ -60,6 +61,7 @@ export function SkillAgentView() {
   const search = createSearchState()
   const [message, setMessage] = createSignal("")
   const [hasApplyError, setHasApplyError] = createSignal(false)
+  const [updating, setUpdating] = createSignal(false)
 
   // 预留行：AppHeader/TabBar/分隔线 + SearchBar + Inspector + StatusBar + 间距。
   const viewport = () => Math.max(1, dim().height - 17)
@@ -94,6 +96,12 @@ export function SkillAgentView() {
     return r >= 0 && r < rows.length ? rows[r] : undefined
   }
 
+  // 维度2：可更新到 SSOT 的 skill name 集合（仅已安装 skill，供 Matrix name 列红点）。
+  const updatableNames = createMemo(() => {
+    const st = data.snapshot.state
+    if (!st) return new Set<string>()
+    return new Set(listUpdatableSkillNames(st))
+  })
   // 行/列数变化（搜索过滤、数据刷新、终端 resize）时 clamp cursor + scroll。
   // 行数变化（搜索过滤、数据刷新、agent 启停）后 clamp cursor.row + scrollOffset。
   // 不能在此 effect 里调 matrix.move：realign 读 cursor 使本 effect 依赖 cursor，而 move
@@ -137,7 +145,9 @@ export function SkillAgentView() {
     },
     onManageAgents: () => {
       AgentManagerDialog.show(dialog)
-    }
+    },
+    onUpdate: doUpdate,
+    onUpdateAll: doUpdateAll
   })
   onMount(() => viewKey.setHandler(handleKey))
   onCleanup(() => viewKey.setHandler(null))
@@ -237,11 +247,83 @@ export function SkillAgentView() {
     }
   }
 
-  const statusLine = () =>
-    message() ||
-    (matrix.hasPending()
-      ? i18n.t("skillView.pressReview", { count: matrix.pendingCount() })
-      : i18n.t("skillView.skillCount", { count: filtered().length }))
+  /** `u` 更新选中 skill 到 SSOT 最新版（ConfirmDialog 确认 + skillUpdate + reload）。 */
+  async function doUpdate(skillName: string): Promise<void> {
+    if (updating()) return
+    const ok = await ConfirmDialog.show(
+      dialog,
+      i18n.t("skillDetail.updateTitle"),
+      i18n.t("skillDetail.updateMsg", { name: skillName }),
+      { confirmLabel: i18n.t("btn.update"), cancelLabel: i18n.t("btn.cancel") }
+    )
+    if (!ok) return
+    setUpdating(true)
+    try {
+      const configStore = new ConfigStore()
+      const stateStore = new StateStore(configStore.home)
+      await skillUpdate(configStore, stateStore, skillName)
+      await data.reload()
+      setMessage(i18n.t("skillView.updated", { name: skillName }))
+    } catch (err) {
+      setMessage(i18n.t("skillView.updateFail", { message: errorMessage(err, i18n.locale()) }))
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  /** `U` 更新所有当前标记为可更新的已安装 skill。 */
+  async function doUpdateAll(): Promise<void> {
+    if (updating()) return
+    const names = [...updatableNames()].sort((a, b) => a.localeCompare(b))
+    if (names.length === 0) {
+      setMessage(i18n.t("skillView.noUpdates"))
+      return
+    }
+    const ok = await ConfirmDialog.show(
+      dialog,
+      i18n.t("skillView.updateAllTitle"),
+      i18n.t("skillView.updateAllMsg", { count: names.length }),
+      { confirmLabel: i18n.t("btn.update"), cancelLabel: i18n.t("btn.cancel") }
+    )
+    if (!ok) return
+
+    setUpdating(true)
+    try {
+      const configStore = new ConfigStore()
+      const stateStore = new StateStore(configStore.home)
+      let succeeded = 0
+      const failed: string[] = []
+      for (const name of names) {
+        try {
+          const report = (await skillUpdate(configStore, stateStore, name))[0]
+          if (report?.success) succeeded++
+          else failed.push(name)
+        } catch {
+          failed.push(name)
+        }
+      }
+      await data.reload()
+      setMessage(
+        failed.length > 0
+          ? i18n.t("skillView.updatedAllPartial", {
+              ok: succeeded,
+              failed: failed.length,
+              list: failed.join(", ")
+            })
+          : i18n.t("skillView.updatedAll", { count: succeeded })
+      )
+    } catch (err) {
+      setMessage(i18n.t("skillView.updateFail", { message: errorMessage(err, i18n.locale()) }))
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  const statusLine = () => {
+    if (updating()) return i18n.t("common.updating")
+    if (matrix.hasPending()) return i18n.t("skillView.pressReview", { count: matrix.pendingCount() })
+    return message() || i18n.t("skillView.skillCount", { count: filtered().length })
+  }
 
   return (
     <box flexDirection="column" flexGrow={1} width={Math.max(1, dim().width - 2)} gap={1}>
@@ -265,13 +347,14 @@ export function SkillAgentView() {
               viewport={viewport()}
               nameWidth={matrixNameWidth()}
               cellWidth={matrixCellWidth()}
+              updatable={updatableNames()}
             />
           </Show>
         </Show>
       </box>
-      <Show when={message() || matrix.hasPending()}>
+      <Show when={message() || matrix.hasPending() || updating()}>
         <box height={1} backgroundColor={theme.panelMuted} paddingLeft={1} paddingRight={1}>
-          <text fg={matrix.hasPending() ? theme.warning : theme.textMuted}>{statusLine()}</text>
+          <text fg={updating() ? theme.textMuted : matrix.hasPending() ? theme.warning : theme.textMuted}>{statusLine()}</text>
         </box>
       </Show>
       <Inspector
@@ -281,6 +364,7 @@ export function SkillAgentView() {
         matrix={matrix}
         theme={theme}
         t={i18n.t}
+        updatable={selected() ? updatableNames().has(selected()!.name) : false}
       />
       {/* 错误明细（apply 出错时滚动展示） */}
       <Show when={hasApplyError()}>

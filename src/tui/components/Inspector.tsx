@@ -15,6 +15,8 @@ export interface InspectorProps {
   matrix: MatrixState
   theme: Theme
   t: TranslateFn
+  /** 当前选中技能是否有源内容可更新到 SSOT。 */
+  updatable?: boolean
 }
 
 export function Inspector(props: InspectorProps) {
@@ -44,6 +46,9 @@ export function Inspector(props: InspectorProps) {
                 <text fg={theme.text} attributes={TextAttributes.BOLD}>
                   {skill().displayName || skill().name}
                 </text>
+                <Show when={props.updatable}>
+                  <text fg={theme.danger}>* {props.t("skillDetail.updatable")}</text>
+                </Show>
                 <text fg={theme.textMuted}>{props.t("info.status")}: </text>
                 <text fg={theme.primary}>{skill().status}</text>
                 <text fg={theme.textMuted}> | {props.t("info.candidates")}: </text>

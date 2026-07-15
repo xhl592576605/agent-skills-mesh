@@ -51,6 +51,30 @@ export async function gitPullFfOnly(dir: string): Promise<GitPullResult> {
   }
 }
 
+/**
+ * 在 dir 中执行 `git fetch`（不 merge）。失败抛含 stderr 的 Error；调用方决定是否降级。
+ */
+export async function gitFetch(dir: string): Promise<void> {
+  try {
+    await execFileAsync("git", ["-C", dir, "fetch"]);
+  } catch (error) {
+    throw new Error(gitErrorMessage(error, `git -C ${dir} fetch`));
+  }
+}
+
+/**
+ * 在 dir 中执行 `git rev-parse <ref>`，返回 trim 后的值（通常为 commit SHA）。
+ * 用于比较本地 HEAD 与 upstream（`@{u}` / `origin/<branch>`）判定远端是否有更新。
+ */
+export async function gitRevParse(dir: string, ref: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("git", ["-C", dir, "rev-parse", ref]);
+    return stdout.trim();
+  } catch (error) {
+    throw new Error(gitErrorMessage(error, `git -C ${dir} rev-parse ${ref}`));
+  }
+}
+
 function gitErrorMessage(error: unknown, command: string): string {
   const stderr = stderrOf(error).trim();
   const fallback = error instanceof Error ? error.message : String(error);

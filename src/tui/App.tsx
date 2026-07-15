@@ -13,9 +13,8 @@ import { SkillAgentView } from "./views/SkillAgentView.js"
 import { SourceView } from "./views/SourceView.js"
 import { DoctorView } from "./views/DoctorView.js"
 import { createAppShellKeyHandler } from "./state/app-keys.js"
+import { tabHintKeys, type AppTab } from "./state/tab-hints.js"
 import type { Locale } from "../i18n/index.js"
-
-type Tab = "skill" | "source" | "doctor"
 
 /**
  * App —— Provider 装配 + 布局入口。
@@ -46,7 +45,7 @@ function AppShell() {
   const data = useData()
   const renderer = useRenderer()
   const dim = useTerminalDimensions()
-  const [tab, setTab] = createSignal<Tab>("skill")
+  const [tab, setTab] = createSignal<AppTab>("skill")
 
   function exitTui() {
     renderer.destroy()
@@ -69,42 +68,9 @@ function AppShell() {
   ])
 
   /** 当前 tab 的快捷键提示（注入 StatusBar）。依赖 t()，语言切换后响应式。 */
-  const tabHints = createMemo((): readonly string[] => {
-    if (tab() === "skill") {
-      return [
-        i18n.t("hint.move"),
-        i18n.t("hint.toggle"),
-        i18n.t("hint.rowOn"),
-        i18n.t("hint.delete"),
-        i18n.t("hint.review"),
-        i18n.t("hint.info"),
-        i18n.t("hint.agents"),
-        i18n.t("hint.search"),
-        i18n.t("hint.help")
-      ]
-    }
-    if (tab() === "source") {
-      return [
-        i18n.t("hint.moveV"),
-        i18n.t("hint.add"),
-        i18n.t("hint.update"),
-        i18n.t("hint.remove"),
-        i18n.t("hint.enDis"),
-        i18n.t("hint.detail"),
-        i18n.t("hint.refresh"),
-        i18n.t("hint.help"),
-        i18n.t("hint.tabs")
-      ]
-    }
-    return [
-      i18n.t("hint.moveV"),
-      i18n.t("hint.fix"),
-      i18n.t("hint.fixAll"),
-      i18n.t("hint.refresh"),
-      i18n.t("hint.help"),
-      i18n.t("hint.tabs")
-    ]
-  })
+  const tabHints = createMemo((): readonly string[] =>
+    tabHintKeys(tab()).map((key) => i18n.t(key))
+  )
 
   /**
    * 单一 useKeyboard 集中路由（design §6）。opentui useKeyboard 无 stopPropagation，
@@ -122,7 +88,7 @@ function AppShell() {
       getViewHandler: () => viewHandler,
       setTab,
       cycleTab: () => {
-        const order: Tab[] = ["skill", "source", "doctor"]
+        const order: AppTab[] = ["skill", "source", "doctor"]
         const i = order.indexOf(tab())
         setTab(order[(i + 1) % order.length])
       },

@@ -27,7 +27,7 @@ Reference examples:
 
 - Treat `config.toml` as user intent: sources, agents, settings, and paths.
 - Treat `index.json` as generated scan state: sources snapshot, skills, installations, and issues.
-- Treat `state.json` as installed-state truth: installed skill source metadata, SSOT path, content hash, timestamps, and enabled agent symlink records.
+- Treat `state.json` as installed-state truth: installed skill source metadata, SSOT path, content hash, timestamps, enabled agent symlink records, optional source update snapshots, and optional installed-skill source hashes.
 - Do not add ad-hoc persistence from CLI handlers. Add storage behavior under `src/core/storage/**` and keep callers typed.
 - Resolve `~/.agent-skills-mesh` through `resolveConfiguredPath()` / `getAsmHome()` in `src/utils/path.ts`; this preserves `ASM_HOME` override behavior.
 
@@ -57,7 +57,16 @@ No migration framework exists. Both persisted formats currently have `version: 1
 - `AppConfig.version` in `src/core/models/config.ts`.
 - `IndexFile.version` in `src/core/models/index.ts`.
 
-If a future schema change is introduced:
+Additive optional fields may remain on the current version only when absence has a safe, explicit meaning. Current `state.json` examples are:
+
+```ts
+StateFile.sourceSnapshots?: Record<string, SourceSnapshot>
+InstalledSkillRecord.sourceHash?: string
+```
+
+For both fields, absence means "not checked" and must not produce an update marker. `StateStore.read()` must preserve `sourceSnapshots` during read/write round trips. Tests must cover old files without either field and new files with both fields.
+
+If a future incompatible schema change is introduced:
 
 1. Add explicit versioned migration logic in the relevant store file.
 2. Keep backward-compatible reads where practical.

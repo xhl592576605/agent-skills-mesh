@@ -10,6 +10,10 @@ import {
 } from "../../src/tui/state/projection.js"
 import { createSearchState, filterSkills } from "../../src/tui/state/search.js"
 import {
+  formatUpdateIndicatorHeader,
+  formatUpdateIndicatorName
+} from "../../src/tui/state/update-indicator.js"
+import {
   createSkillAgentKeyHandler,
   type SkillAgentKeyDeps
 } from "../../src/tui/state/skill-agent-keys.js"
@@ -60,6 +64,20 @@ function makeInstallation(status: InstallationRecord["status"]): InstallationRec
     targetPath: "/tmp/t"
   }
 }
+
+describe("技能与来源更新标记", () => {
+  it("红色星号标记使用固定宽度，且不改变名称或表头起始列", () => {
+    const current = formatUpdateIndicatorName("current", false)
+    const updatable = formatUpdateIndicatorName("updatable", true)
+
+    expect(current.marker).toBe("  ")
+    expect(updatable.marker).toBe("* ")
+    expect(current.marker.length).toBe(updatable.marker.length)
+    expect(current.text.indexOf("current")).toBe(updatable.text.indexOf("updatable"))
+    expect(formatUpdateIndicatorHeader("名称").indexOf("名称")).toBe(current.text.indexOf("current"))
+    expect(updatable.text).toBe("* updatable")
+  })
+})
 
 describe("createMatrixState — cursor", () => {
   it("初始化 cursor={0,0}、scrollOffset=0、pending 为空", () => {
@@ -315,14 +333,17 @@ describe("search — filterSkills", () => {
   })
 })
 
-/** 构造最小 KeyEvent mock（createSkillAgentKeyHandler 只读 name/sequence/ctrl/meta）。 */
-function key(name: string, opts: { sequence?: string; ctrl?: boolean; meta?: boolean } = {}): KeyEvent {
+/** 构造最小 KeyEvent mock（createSkillAgentKeyHandler 只读 name/sequence/ctrl/meta/shift）。 */
+function key(
+  name: string,
+  opts: { sequence?: string; ctrl?: boolean; meta?: boolean; shift?: boolean } = {}
+): KeyEvent {
   return {
     name,
     sequence: opts.sequence ?? name,
     ctrl: opts.ctrl ?? false,
     meta: opts.meta ?? false,
-    shift: false
+    shift: opts.shift ?? false
   } as unknown as KeyEvent
 }
 
@@ -382,6 +403,37 @@ describe("createSkillAgentKeyHandler — 非搜索态键路由", () => {
     const deps = makeHandlerDeps()
     const handler = createSkillAgentKeyHandler(deps)
     expect(handler(key("d"))).toBe(false)
+  })
+
+  it("u 触发当前技能更新", () => {
+    const onUpdate = vi.fn()
+    const deps = makeHandlerDeps({ onUpdate })
+    const handler = createSkillAgentKeyHandler(deps)
+    expect(handler(key("u"))).toBe(true)
+    expect(onUpdate).toHaveBeenCalledWith("skill-a")
+  })
+
+  it("u 未注入 onUpdate 时 fallthrough（返回 false）", () => {
+    const deps = makeHandlerDeps()
+    const handler = createSkillAgentKeyHandler(deps)
+    expect(handler(key("u"))).toBe(false)
+  })
+
+  it("U 仅触发全部更新，不触发单项更新", () => {
+    const onUpdate = vi.fn()
+    const onUpdateAll = vi.fn()
+    const deps = makeHandlerDeps({ onUpdate, onUpdateAll })
+    const handler = createSkillAgentKeyHandler(deps)
+
+    expect(handler(key("u", { sequence: "U", shift: true }))).toBe(true)
+    expect(onUpdateAll).toHaveBeenCalledOnce()
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
+
+  it("U 未注入 onUpdateAll 时 fallthrough（返回 false）", () => {
+    const deps = makeHandlerDeps({ onUpdate: vi.fn() })
+    const handler = createSkillAgentKeyHandler(deps)
+    expect(handler(key("u", { sequence: "U", shift: true }))).toBe(false)
   })
 
   it("enter 触发 review（调用 onReview）", () => {

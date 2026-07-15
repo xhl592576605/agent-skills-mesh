@@ -122,6 +122,7 @@ export async function skillRebind(configStore: ConfigStore, stateStore: StateSto
   assertPathInside(resolveConfiguredPath(source.path), resolveConfiguredPath(candidate.path), "rebind candidate path");
 
   record.source = installedSourceFromCandidate(source, candidate);
+  record.sourceHash = undefined; // 换源，清除维度2标记，待下次 checkSkillUpdates
   record.updatedAt = new Date().toISOString();
   await stateStore.write(state);
 }
@@ -199,7 +200,9 @@ async function updateOneSkill(config: AppConfig, state: StateFile, name: string,
     record.displayName = metadata.displayName;
     record.description = metadata.description;
     record.tags = metadata.tags;
-    record.contentHash = await sha256Directory(record.ssotPath);
+    const ssotHash = await sha256Directory(record.ssotPath);
+    record.contentHash = ssotHash;
+    record.sourceHash = ssotHash; // update 到最新，源与 SSOT 一致，消除维度2标记
     record.updatedAt = new Date().toISOString();
     await stateStore.write(state);
     try {

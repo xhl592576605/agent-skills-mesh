@@ -41,6 +41,7 @@ keeps a TTY check so non-TTY contexts degrade to text output.
 | [Component Guidelines](./component-guidelines.md) | OpenTUI `box`/`text` primitives, props, portals, element factories | Active |
 | [Solid Patterns](./solid-patterns.md) | Signals/stores/effects, `useKeyboard`, `useViewKey`, owner-context pitfalls | Active |
 | [State Management](./state-management.md) | Snapshot store, pending matrix state, dialog stack, centralized key routing | Active |
+| [TUI Update Workflow](./update-workflow.md) | Source/skill update detection, persisted state, key routing, markers, batch update contracts | Active |
 | [Quality Guidelines](./quality-guidelines.md) | OpenTUI testing, color-free safety, dialog confirm model, core-zero-change | Active |
 | [Type Safety](./type-safety.md) | Reusing strict core model types in SolidJS code | Active |
 

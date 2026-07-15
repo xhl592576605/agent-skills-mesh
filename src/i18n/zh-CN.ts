@@ -60,6 +60,8 @@ export const dict: Dict = {
   "common.errorLine": "错误：{{message}}",
   "common.name": "名称",
   "common.esc": "esc",
+  "common.pulling": "⠋ 拉取中...",
+  "common.updating": "⠋ 更新中...",
 
   "header.total": "项",
   "header.errors": "错误",
@@ -75,6 +77,8 @@ export const dict: Dict = {
   "status.disabled": "已禁用",
   "status.upToDate": "已是最新",
   "status.updatable": "可更新：{{list}}",
+  "status.sourcesUpdatable": "* {{count}} 个来源有更新，按 u 拉取",
+  "status.skillsUpdatable": "* {{count}} 个技能可更新到单一可信源，按 u 更新",
 
   // === 按钮 label ===
   "btn.confirm": "确认",
@@ -106,6 +110,7 @@ export const dict: Dict = {
   "hint.moveV": "↑↓ 移动",
   "hint.add": "a 添加",
   "hint.update": "u 更新",
+  "hint.updateAll": "U 全部更新",
   "hint.remove": "d 移除",
   "hint.enDis": "e/x 启/停",
   "hint.detail": "enter 详情",
@@ -122,7 +127,7 @@ export const dict: Dict = {
   "help.globalLine": "1/2/3 切换 · ctrl+r 刷新 · L 语言 · ? 帮助 · esc/ctrl+c 退出",
   "help.skillSection": "技能×智能体",
   "help.skillLine":
-    "↑↓←→/hjkl 移动 · space 切换 · a 行全装 · d 删除 · enter 审查 · i 详情 · A 智能体 (space 切换 · a 添加) · / 搜索",
+    "↑↓←→/hjkl 移动 · space 切换 · a 行全装 · d 删除 · u 更新 · U 全部更新 · enter 审查 · i 详情 · A 智能体 (space 切换 · a 添加) · / 搜索",
   "help.sourceSection": "来源",
   "help.sourceLine": "a 添加 · u 更新 · d 移除 · e/x 启用/禁用 · enter 详情",
   "help.doctorSection": "健康检查",
@@ -230,6 +235,8 @@ export const dict: Dict = {
   "prompt.footer": "return 确认 · backspace 删除 · esc 取消",
   "select.footer": "↑↓ 移动 · return 选择 · esc 取消",
   "multiSelect.footer": "↑↓ 移动 · space 切换 · i 查看文档 · return 添加 · esc 取消",
+  "multiSelect.footerWithUpdate": "↑↓ 移动 · space 切换 · i 查看文档 · u 更新 · return 添加 · esc 取消",
+  "multiSelect.updateRequiresInstalled": "该技能尚未安装，请先选择并按 return 添加",
 
   // === TUI AddAgentDialog ===
   "addAgent.titleId": "添加智能体 — id",
@@ -275,12 +282,21 @@ export const dict: Dict = {
   "skillDetail.addFailed": "添加失败",
   "skillDetail.footerInstalled": "u 更新 · d 移除 · b 重新绑定 ·",
   "skillDetail.footerAdd": "+ 添加 ·",
+  "skillDetail.updatable": "可更新到单一可信源（按 u）",
+  "skillDetail.upToDate": "已是最新",
 
   // === TUI SkillAgentView（tab 1）===
   "skillView.deleteTitle": "删除技能？",
   "skillView.deleteMsg": "{{name}}\n从单一可信源删除 + 卸载所有智能体符号链接",
   "skillView.deleted": "已删除技能 {{name}}",
   "skillView.deleteFail": "删除失败：{{message}}",
+  "skillView.updated": "已更新技能 {{name}}",
+  "skillView.updateFail": "更新失败：{{message}}",
+  "skillView.noUpdates": "没有可更新的技能",
+  "skillView.updateAllTitle": "更新全部可更新技能？",
+  "skillView.updateAllMsg": "将更新 {{count}} 个技能到单一可信源中的最新内容",
+  "skillView.updatedAll": "已更新全部 {{count}} 个技能",
+  "skillView.updatedAllPartial": "批量更新完成：成功 {{ok}}，失败 {{failed}}（{{list}}）",
   "skillView.applyTitle": "应用待处理变更？",
   "skillView.summaryTotal": "{{installs}} 安装 / {{uninstalls}} 卸载",
   "skillView.summaryRow": "{{skill}}：{{parts}}",

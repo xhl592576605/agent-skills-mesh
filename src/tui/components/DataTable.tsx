@@ -25,6 +25,8 @@ export interface CellContent {
   text: string
   fg?: RGBA
   attributes?: number
+  /** 多段着色（优先于 text/fg）：单元格内分段渲染，每段独立 fg。用于「标记+名称」同列异色。 */
+  segments?: Array<{ text: string; fg?: RGBA }>
 }
 
 export interface Column<T> {
@@ -100,17 +102,28 @@ export function DataTable<T>(props: DataTableProps<T>): JSX.Element {
     // createMemo 确保 col.render 在响应式上下文执行：内部读取的 signal（intent/cursor）
     // 变化时重算，驱动单元格文本/颜色更新。isCursorRow 以 accessor 传入，跟踪光标移动。
     const content = createMemo(() => col.render(row, { rowIndex, isCursorRow: isCursorRow() }))
+    const defaultFg = () => (isCursorRow() ? theme.text : theme.textMuted)
     return (
       <box width={col.width + SEP_WIDTH} flexDirection="row">
         <text fg={theme.border}>│ </text>
-        <text
-          width={col.width}
-          fg={content().fg ?? (isCursorRow() ? theme.text : theme.textMuted)}
-          attributes={content().attributes}
-          wrapMode="none"
+        <Show
+          when={content().segments}
+          fallback={
+            <text width={col.width} fg={content().fg ?? defaultFg()} attributes={content().attributes} wrapMode="none">
+              {alignText(content().text, col.width, col.align)}
+            </text>
+          }
         >
-          {alignText(content().text, col.width, col.align)}
-        </text>
+          <box width={col.width} flexDirection="row">
+            <For each={content().segments ?? []}>
+              {(seg) => (
+                <text fg={seg.fg ?? defaultFg()} attributes={content().attributes} wrapMode="none">
+                  {seg.text}
+                </text>
+              )}
+            </For>
+          </box>
+        </Show>
       </box>
     )
   }

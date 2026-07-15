@@ -18,13 +18,14 @@ import {
   type SourceUpdateReport
 } from "../../core/services/source-service.js"
 import { refreshIndex } from "../../core/services/refresh-service.js"
+import { checkSkillUpdates, checkSources, countUpdatableSources, isSkillUpdatable, isSourceUpdatable } from "../../core/services/update-check-service.js"
 import type { SourceConfig } from "../../core/models/config.js"
 import { ConfirmDialog } from "../dialogs/ConfirmDialog.js"
 import { SelectDialog } from "../dialogs/SelectDialog.js"
 import { AddSourceDialog } from "../dialogs/AddSourceDialog.js"
 import { MultiSelectDialog } from "../dialogs/MultiSelectDialog.js"
 import { SkillMdDialog } from "../dialogs/SkillMdDialog.js"
-import { skillAdd } from "../../core/services/skill-service.js"
+import { skillAdd, skillUpdate } from "../../core/services/skill-service.js"
 import { errorMessage } from "../../i18n/index.js"
 import path from "node:path"
 import {
@@ -33,6 +34,10 @@ import {
 } from "../state/source-keys.js"
 import { Panel } from "../components/Panel.js"
 import { DataTable, type Column } from "../components/DataTable.js"
+import {
+  formatUpdateIndicatorHeader,
+  formatUpdateIndicatorName
+} from "../state/update-indicator.js"
 
 // re-export 供测试使用，保持「view 导出 key handler 契约」（design §6）。
 export { createSourceKeyHandler, type SourceKeyDeps } from "../state/source-keys.js"
@@ -58,6 +63,8 @@ export function SourceView() {
   const dim = useTerminalDimensions()
   const [cursor, setCursor] = createSignal(0)
   const [message, setMessage] = createSignal("")
+  const [updating, setUpdating] = createSignal(false)
+  const [updatingSkill, setUpdatingSkill] = createSignal(false)
 
   const sources = (): SourceConfig[] => {
     const cfg = data.snapshot.config
@@ -128,10 +135,14 @@ export function SourceView() {
       { confirmLabel: i18n.t("btn.update"), cancelLabel: i18n.t("btn.cancel") }
     )
     if (!ok) return
+    setUpdating(true)
     try {
       const configStore = new ConfigStore()
       const stateStore = new StateStore(configStore.home)
       const reports = await sourceUpdate(configStore, stateStore, src.id)
+      // pull 后联动检测：维度1 重检该 source（hasUpdate 清除）+ 维度2 检测该 source 下 skill（仅检查）。
+      await checkSources(configStore, stateStore, src.id)
+      await checkSkillUpdates(configStore, stateStore, src.id)
       // sourceUpdate 内部不重建 index；显式 refreshIndex 写回（与 CLI 一致）。
       const config = await configStore.read()
       const state = await stateStore.read()
@@ -141,6 +152,8 @@ export function SourceView() {
       setMessage(formatUpdateReport(reports, i18n.t))
     } catch (err) {
       setMessage(i18n.t("sourceView.updateFail", { message: errorMessage(err, i18n.locale()) }))
+    } finally {
+      setUpdating(false)
     }
   }
 
@@ -195,8 +208,31 @@ export function SourceView() {
     }
   }
 
+  async function updateInstalledSkill(skillName: string): Promise<void> {
+    const ok = await ConfirmDialog.show(
+      dialog,
+      i18n.t("skillDetail.updateTitle"),
+      i18n.t("skillDetail.updateMsg", { name: skillName }),
+      { confirmLabel: i18n.t("btn.update"), cancelLabel: i18n.t("btn.cancel") }
+    )
+    if (!ok) return
+    setUpdatingSkill(true)
+    try {
+      const configStore = new ConfigStore()
+      const stateStore = new StateStore(configStore.home)
+      await skillUpdate(configStore, stateStore, skillName)
+      await sync()
+      setMessage(i18n.t("skillView.updated", { name: skillName }))
+    } catch (err) {
+      setMessage(i18n.t("skillView.updateFail", { message: errorMessage(err, i18n.locale()) }))
+    } finally {
+      setUpdatingSkill(false)
+    }
+  }
+
   /**
-   * 展示 source 贡献的 skill 列表（R4 多选）：标记已 add、space 多选、i 看 SKILL.md、return 批量 add。
+   * 展示 source 贡献的 skill 列表（R4 多选）：标记已 add、space 多选、i 看 SKILL.md、
+   * u 更新已安装项、return 批量 add。
    */
   async function doDetail(): Promise<void> {
     const src = selected()
@@ -213,15 +249,19 @@ export function SourceView() {
     }
     const options = skillsOfSource.map((s) => {
       const cand = s.candidates.find((c) => c.sourceId === src.id)!
+      const rec = state.installedSkills[s.name]
+      const updatable = rec ? isSkillUpdatable(rec) : false
       return {
         label: s.name,
         value: { name: s.name, mdPath: path.join(cand.path, "SKILL.md") } as { name: string; mdPath: string },
         description: s.status,
-        locked: Boolean(state.installedSkills[s.name]),
+        locked: Boolean(rec),
+        updatable
       }
     })
     const chosen = await MultiSelectDialog.show(dialog, i18n.t("sourceView.skillsTitle", { id: src.id }), options, {
       onInspect: (v) => SkillMdDialog.show(dialog, v.name, v.mdPath),
+      onUpdate: (v) => updateInstalledSkill(v.name)
     })
     if (!chosen || chosen.length === 0) return
     const configStore = new ConfigStore()
@@ -243,11 +283,35 @@ export function SourceView() {
     )
   }
 
-  const statusLine = () => message() || i18n.t("sourceView.sourceCount", { count: sources().length })
+  const updatableCount = () =>
+    data.snapshot.state ? countUpdatableSources(data.snapshot.state.sourceSnapshots ?? {}) : 0
+  const statusLine = () => {
+    if (updating()) return i18n.t("common.pulling")
+    if (updatingSkill()) return i18n.t("common.updating")
+    if (updatableCount() > 0) return i18n.t("status.sourcesUpdatable", { count: updatableCount() })
+    return message() || i18n.t("sourceView.sourceCount", { count: sources().length })
+  }
   // path 列宽度：总宽(panel 内) - prefix(5) - 前三列(30+22+20) - path 分隔线(2)。
   const pathWidth = () => Math.max(20, dim().width - 81)
   const sourceColumns = (): Column<SourceConfig>[] => [
-    { key: "id", header: i18n.t("sourceView.headerId"), width: 28, render: (src, ctx) => ({ text: src.id, fg: ctx.isCursorRow ? theme.text : theme.text }) },
+    {
+      key: "id",
+      header: formatUpdateIndicatorHeader(i18n.t("sourceView.headerId")),
+      width: 28,
+      render: (src, ctx) => {
+        const content = formatUpdateIndicatorName(
+          src.id,
+          isSourceUpdatable(data.snapshot.state?.sourceSnapshots ?? {}, src.id)
+        )
+        return {
+          text: content.text,
+          segments: [
+            { text: content.marker, fg: theme.danger },
+            { text: content.name, fg: ctx.isCursorRow ? theme.text : theme.text }
+          ]
+        }
+      }
+    },
     { key: "type", header: i18n.t("sourceView.headerType"), width: 20, render: (src) => ({ text: `⌘ ${src.type}`, fg: theme.textMuted }) },
     {
       key: "enabled",
@@ -302,9 +366,9 @@ export function SourceView() {
           )}
         </Show>
       </Panel>
-      <Show when={message()}>
+      <Show when={message() || updatableCount() > 0 || updating() || updatingSkill()}>
         <box height={1} backgroundColor={theme.panelMuted} paddingLeft={1} paddingRight={1}>
-          <text fg={theme.warning}>{statusLine()}</text>
+          <text fg={updating() || updatingSkill() || updatableCount() > 0 ? theme.danger : theme.warning}>{statusLine()}</text>
         </box>
       </Show>
     </box>
