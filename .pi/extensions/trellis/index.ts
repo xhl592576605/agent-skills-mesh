@@ -1422,16 +1422,26 @@ export default function trellisExtension(pi: {
     };
     return turnCache;
   };
-  const startupKeys = new Set<string>();
+  // Provider prefix caches invalidate from byte 0 whenever the system prompt
+  // changes, so everything injected into systemPrompt is memoized per context
+  // key and stays byte-identical for the life of the process. Volatile state
+  // travels through persisted custom messages instead (append-only history).
+  const startupCtxCache = new Map<string, string>();
   const getStartupCtx = (
     k: string | null,
     turn: { ov: string },
   ): string => {
     const key = k ?? "default";
-    if (startupKeys.has(key)) return "";
-    startupKeys.add(key);
-    return buildStartupContext(root, k, turn.ov);
+    let startup = startupCtxCache.get(key);
+    if (startup === undefined) {
+      startup = buildStartupContext(root, k, turn.ov);
+      startupCtxCache.set(key, startup);
+    }
+    return startup;
   };
+  const taskCtxSnapshot = new Map<string, string>();
+  const lastSentTaskCtx = new Map<string, string>();
+  const lastSentRuntimeCtx = new Map<string, string>();
 
   // Toggle only the latest subagent native card; do not use Pi global tool expansion.
   const toggleDetail = (ctx: PiExtensionContext) => {
@@ -1645,29 +1655,45 @@ export default function trellisExtension(pi: {
       return { isError: true };
     return undefined;
   });
-  pi.on?.("input", (event, ctx) => {
-    const k = getKey(event, ctx);
-    const ev = event as { text?: string };
-    if (typeof ev.text !== "string" || !ev.text.trim())
-      return { action: "continue" };
-    const { wf, ov } = getTurnCtx(k);
-    const injection = [wf, ov].filter(Boolean).join("\n\n");
-    if (!injection) return { action: "continue" };
-    return {
-      action: "transform",
-      text: [ev.text, injection].join("\n\n"),
-    };
-  });
   pi.on?.("before_agent_start", (event, ctx) => {
     const k = getKey(event, ctx);
+    const key = k ?? "default";
     const cur = (event as { systemPrompt?: string }).systemPrompt ?? "";
-    const ctxText = buildContext(root, "trellis-implement", k);
     const turn = getTurnCtx(k);
     const startup = getStartupCtx(k, turn);
+    // Task context is snapshotted into systemPrompt once; later on-disk
+    // changes are delivered as persisted messages so the prefix stays stable.
+    const freshTaskCtx = buildContext(root, "trellis-implement", k);
+    let taskCtx = taskCtxSnapshot.get(key);
+    if (taskCtx === undefined) {
+      taskCtx = freshTaskCtx;
+      taskCtxSnapshot.set(key, taskCtx);
+      lastSentTaskCtx.set(key, freshTaskCtx);
+    }
+    const updates: string[] = [];
+    const runtimeContext = [turn.wf, turn.ov].filter(Boolean).join("\n\n");
+    if (runtimeContext && runtimeContext !== lastSentRuntimeCtx.get(key)) {
+      lastSentRuntimeCtx.set(key, runtimeContext);
+      updates.push(runtimeContext);
+    }
+    if (freshTaskCtx !== lastSentTaskCtx.get(key)) {
+      lastSentTaskCtx.set(key, freshTaskCtx);
+      updates.push(
+        "<trellis-task-context-update>\nTask context changed on disk. This supersedes the Trellis Task Context in the system prompt.\n\n" +
+          freshTaskCtx +
+          "\n</trellis-task-context-update>",
+      );
+    }
+    const content = updates.join("\n\n");
     return {
-      systemPrompt: [cur, startup, ctxText, turn.wf, turn.ov]
-        .filter(Boolean)
-        .join("\n\n"),
+      message: content
+        ? {
+            customType: "trellis-runtime-context",
+            content,
+            display: false,
+          }
+        : undefined,
+      systemPrompt: [cur, startup, taskCtx].filter(Boolean).join("\n\n"),
     };
   });
   pi.on?.("context", (event, ctx) => {
