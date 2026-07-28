@@ -119,6 +119,29 @@ describe("字典完整性", () => {
   });
 });
 
+describe("skills.sh 外部详情文案", () => {
+  test.each(["en", "zh-CN"] as const)("%s 键位提示覆盖链接选择、打开、安装、返回和取消", (locale) => {
+    const hint = t("skillsSh.confirmHint", locale);
+    for (const token of ["tab", "o", "return", "backspace", "esc"]) {
+      expect(hint).toContain(token);
+    }
+    expect(hint).not.toMatch(/copy|复制/i);
+  });
+
+  test("中英文均明确搜索接口无描述并引导浏览器查看", () => {
+    expect(t("skillsSh.descriptionExternal", "en")).toMatch(/no description.*browser/i);
+    expect(t("skillsSh.descriptionExternal", "zh-CN")).toMatch(/不返回描述.*浏览器/);
+  });
+
+  test("链接 opening/success/error 都有颜色无关符号", () => {
+    for (const locale of ["en", "zh-CN"] as const) {
+      expect(t("skillsSh.linkOpening", locale)).toContain("⠋");
+      expect(t("skillsSh.linkOpened", locale, { url: "x" })).toContain("[✓]");
+      expect(t("skillsSh.linkOpenFailed", locale, { message: "x" })).toContain("[!]");
+    }
+  });
+});
+
 // === 语言解析优先级链（AC2）===
 describe("resolveLanguage 优先级链", () => {
   beforeEach(() => setEnv({ LANG: "en_US.UTF-8", LC_ALL: "", LC_MESSAGES: "" }));

@@ -3,6 +3,7 @@ import { createDialogStore, type DialogContextValue, type DialogStackItem } from
 import { ConfirmDialog } from "../../src/tui/dialogs/ConfirmDialog.js"
 import { SelectDialog } from "../../src/tui/dialogs/SelectDialog.js"
 import { PromptDialog } from "../../src/tui/dialogs/PromptDialog.js"
+import { SkillsShSearchDialog } from "../../src/tui/dialogs/SkillsShSearchDialog.js"
 
 /**
  * 弹窗栈 + 各 show() Promise 语义纯函数测试（design §7，prd A）。
@@ -277,6 +278,24 @@ describe("PromptDialog.show — Promise 语义", () => {
   it("带 defaultValue / placeholder 参数正常注册", () => {
     const d = mockDialog()
     expect(() => void PromptDialog.show(d, "t", "init", "hint")).not.toThrow()
+  })
+})
+
+describe("SkillsShSearchDialog.show — Promise 语义", () => {
+  it("show() 调 replace 注册 element + onClose", () => {
+    const d = mockDialog()
+    void SkillsShSearchDialog.show(d, async () => ({ outcome: "installed", message: "" }))
+    expect(d.lastElement).toBeTypeOf("function")
+    expect(d.lastOnClose).toBeTypeOf("function")
+  })
+
+  it("ESC/遮罩路径（onClose）→ resolve(undefined)，且不触发安装", async () => {
+    const d = mockDialog()
+    const onInstall = vi.fn(async () => ({ outcome: "installed", message: "" }) as const)
+    const p = SkillsShSearchDialog.show(d, onInstall)
+    d.lastOnClose?.()
+    await expect(p).resolves.toBeUndefined()
+    expect(onInstall).not.toHaveBeenCalled()
   })
 })
 

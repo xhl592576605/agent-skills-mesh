@@ -9,6 +9,7 @@ describe("tabHintKeys", () => {
 
   it("各 tab 返回独立的快捷键集合", () => {
     expect(tabHintKeys("source")).toContain("hint.add")
+    expect(tabHintKeys("source")).toContain("hint.discover")
     expect(tabHintKeys("doctor")).toContain("hint.fix")
   })
 })

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { IndexFile } from "../models/index.js";
 import type { AppConfig } from "../models/config.js";
-import type { SkillRecord, SkillStatus } from "../models/skill.js";
+import type { SkillCandidate, SkillRecord, SkillStatus } from "../models/skill.js";
 import type { InstalledSkillRecord, StateFile } from "../models/state.js";
 import { ConfigStore } from "../storage/config-store.js";
 import type { StateStore } from "../storage/state-store.js";
@@ -92,13 +92,62 @@ export async function skillAdd(configStore: ConfigStore, stateStore: StateStore,
   if (candidates.length > 1) throw bizError("SKILL_MULTIPLE_CANDIDATES", { name, sources: candidates.map((candidate) => candidate.sourceId).join(", ") }, `Multiple candidates for ${name}: ${candidates.map((candidate) => candidate.sourceId).join(", ")}; specify --source <id>`);
 
   const candidate = candidates[0];
+  return skillAddCandidate(configStore, stateStore, candidate);
+}
+
+/**
+ * 事务化的「复制 candidate → SSOT + 写 state」helper（design §5.1）。
+ *
+ * 与 {@link skillAdd} 共用，使普通手动添加与 skills.sh 远程安装获得相同一致性保证：
+ * 1. fresh-read config/state，复核 source 仍在 config、candidate 属于 configured-source、
+ *    candidate.path 仍在 source root 内（防 index 陈旧 / source id 复用导致路径逃逸）。
+ * 2. 检查 state 同名与 SSOT target，**永不 replace**（预存目录拒绝覆盖）。
+ * 3. 复制 candidate 到 SSOT（temp+rename，原子）。
+ * 4. 创建 InstalledSkillRecord 并原子写 state。
+ * 5. 第 4 步失败时，仅删除本调用新建的 SSOT target；清理失败返回
+ *    `SKILLS_SH_ROLLBACK_INCOMPLETE`（含原始错误与残留路径），不虚报已完全回滚。
+ */
+export async function skillAddCandidate(
+  configStore: ConfigStore,
+  stateStore: StateStore,
+  candidate: SkillCandidate,
+): Promise<InstalledSkillRecord> {
+  const config = await configStore.read();
+  const state = await stateStore.read();
+  const name = candidate.skillName;
+
+  const source = config.sources.find((entry) => entry.id === candidate.sourceId);
+  if (!source) throw bizError("SOURCE_ID_UNKNOWN", { id: candidate.sourceId }, `Unknown source id: ${candidate.sourceId}`);
+  if (candidate.origin !== "configured-source") throw bizError("CANDIDATE_NOT_CONFIGURED_SOURCE", { sourceId: candidate.sourceId }, `Source ${candidate.sourceId} candidate is not a configured-source`);
+  assertPathInside(resolveConfiguredPath(source.path), resolveConfiguredPath(candidate.path), "candidate path");
+
+  if (state.installedSkills[name]) throw bizError("SKILL_ALREADY_INSTALLED", { name }, `Skill already installed: ${name}`);
   assertSafeSkillName(name);
   const ssotPath = getSsotSkillPath(config, name);
+  const preExisted = await pathExists(ssotPath);
+  if (preExisted) throw bizError("SSOT_TARGET_EXISTS", { ssotPath }, `SSOT target already exists: ${ssotPath}`);
+
   await copySkillDirToSsot(candidate.path, ssotPath, { replace: false });
-  const record = await createInstalledRecordFromCandidate(config, candidate);
-  state.installedSkills[name] = record;
-  await stateStore.write(state);
-  return record;
+  try {
+    const record = await createInstalledRecordFromCandidate(config, candidate);
+    state.installedSkills[name] = record;
+    await stateStore.write(state);
+    return record;
+  } catch (originalError) {
+    // 仅删除本调用新建的 SSOT target；预存目录（preExisted）永不删。
+    if (!preExisted && (await pathExists(ssotPath))) {
+      try {
+        await fs.rm(ssotPath, { recursive: true, force: true });
+      } catch {
+        throw bizError(
+          "SKILLS_SH_ROLLBACK_INCOMPLETE",
+          { message: `${errorMessage(originalError)}; leftover: ${ssotPath}` },
+          `skillAdd failed and cleanup incomplete: ${errorMessage(originalError)}; leftover: ${ssotPath}`,
+        );
+      }
+    }
+    throw originalError;
+  }
 }
 
 /**

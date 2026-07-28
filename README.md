@@ -27,6 +27,7 @@ Agent Skills Mesh（命令名 `asm`）把"技能**从哪来**、**存在哪**、
 - **单一可信源（SSOT）** — 每份技能只存一份，一处变更，所有启用的 agent 同步
 - **symlink / junction 分发** — 启用/禁用即建/删链接（macOS/Linux symlink，Windows directory junction），零拷贝、即时生效
 - **多来源** — git 仓库 / 本地 folder / 单个 skill，自动推断类型
+- **skills.sh 远程发现** — TUI Source 页 `/` 直接搜索 GitHub 技能（相关性 Top 50，仅 `owner/repo`），确认后注册/复用来源并加入 SSOT，不自动启用 agent；端点不可用仍可手动 `a` 添加来源
 - **全生命周期** — 搜索、添加、更新、删除、rebind 孤儿、批量操作
 - **交互式 TUI** — 基于 [@opentui/solid](https://opentui.com)：skill×agent 矩阵 + web 风格浮层弹窗 + fuzzy 搜索
 - **健康检查（doctor）** — external / broken-link / orphan / source-missing / conflict，一键定位与修复
@@ -105,7 +106,7 @@ asm tui
 | Tab | 内容 | 主要操作 |
 |---|---|---|
 | **Skill×Agent** | skill×agent 矩阵，单元格 `[on]`/`[off]`/`[!]` | `space` 切换 · `a`/`d` 批量行 · `enter` 审查 · `i` 详情 |
-| **Source** | 来源列表 | `a` 添加 · `u` 更新 · `d` 删除 · `e`/`x` 启停 |
+| **Source** | 来源列表 | `/` 搜索 skills.sh · `a` 添加 · `u` 更新 · `d` 删除 · `e`/`x` 启停 |
 | **Doctor** | 健康问题 + 可 adopt 候选 | `f` 修复选中 · `F` 修复全部 |
 
 | 键 | 作用 |

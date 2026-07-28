@@ -1,12 +1,13 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { ConfigStore } from "../src/core/storage/config-store.js";
 import { IndexStore } from "../src/core/storage/index-store.js";
 import { StateStore } from "../src/core/storage/state-store.js";
 import { refreshIndex } from "../src/core/services/refresh-service.js";
 import { addSource, removeSource } from "../src/core/services/source-service.js";
+import { pathExists } from "../src/utils/fs.js";
 import { skillAdd, skillRebind, skillRemove, skillUpdate } from "../src/core/services/skill-service.js";
 import { isBizError } from "../src/core/errors.js";
 
@@ -246,5 +247,76 @@ describe("skill-service 业务错误码（W1）", () => {
     await expectBizCode(skillAdd(configStore, stateStore, index, "foo", { source: "nope" }), "SOURCE_ID_UNKNOWN");
     await skillAdd(configStore, stateStore, index, "foo");
     await expectBizCode(skillRebind(configStore, stateStore, index, "foo", "nope"), "SOURCE_ID_UNKNOWN");
+  });
+});
+
+describe("skillAdd 局部事务（design §5.1 / 阶段 3）", () => {
+  let configStore: ConfigStore;
+  let indexStore: IndexStore;
+  let stateStore: StateStore;
+  beforeEach(async () => ({ configStore, indexStore, stateStore } = await setupHome()));
+
+  test("state 写失败时回滚本次新建的 SSOT target，state 保持干净", async () => {
+    const dir = await tempDir("asm-tx-src-");
+    await writeSkill(path.join(dir, "foo"), "foo", "v1");
+    await addSource(configStore, stateStore, dir);
+    const index = await refreshIndex(await configStore.read(), await stateStore.read());
+    const config = await configStore.read();
+    const ssotPath = path.join(config.paths.skills, "foo");
+
+    const spy = vi.spyOn(stateStore, "write").mockRejectedValueOnce(new Error("state write boom"));
+    await expect(skillAdd(configStore, stateStore, index, "foo")).rejects.toThrow(/state write boom/);
+    spy.mockRestore();
+
+    expect(await pathExists(ssotPath)).toBe(false);
+    expect((await stateStore.read()).installedSkills["foo"]).toBeUndefined();
+  });
+
+  test("预存 SSOT 目录（无 state）不被覆盖，内容保留", async () => {
+    const config = await configStore.read();
+    const ssotPath = path.join(config.paths.skills, "preexist");
+    await fs.mkdir(ssotPath, { recursive: true });
+    await fs.writeFile(path.join(ssotPath, "MARKER"), "keep-me", "utf8");
+
+    const dir = await tempDir("asm-preexist-src-");
+    await writeSkill(path.join(dir, "preexist"), "preexist", "src-content");
+    await addSource(configStore, stateStore, dir);
+    const index = await refreshIndex(await configStore.read(), await stateStore.read());
+
+    await expectBizCode(skillAdd(configStore, stateStore, index, "preexist"), "SSOT_TARGET_EXISTS");
+    // 预存目录内容不变
+    expect(await fs.readFile(path.join(ssotPath, "MARKER"), "utf8")).toBe("keep-me");
+    expect((await stateStore.read()).installedSkills["preexist"]).toBeUndefined();
+  });
+
+  test("state 写失败且 SSOT 清理也失败 -> SKILLS_SH_ROLLBACK_INCOMPLETE（含残留路径）", async () => {
+    const dir = await tempDir("asm-rbi-src-");
+    await writeSkill(path.join(dir, "foo"), "foo", "v1");
+    await addSource(configStore, stateStore, dir);
+    const index = await refreshIndex(await configStore.read(), await stateStore.read());
+    const config = await configStore.read();
+    const ssotPath = path.join(config.paths.skills, "foo");
+
+    const writeSpy = vi.spyOn(stateStore, "write").mockRejectedValueOnce(new Error("state write boom"));
+    const rmSpy = vi.spyOn(fs, "rm").mockRejectedValueOnce(new Error("rm boom"));
+    const e = await skillAdd(configStore, stateStore, index, "foo").catch((x: unknown) => x);
+    writeSpy.mockRestore();
+    rmSpy.mockRestore();
+
+    expect(isBizError(e)).toBe(true);
+    expect((e as { code: string }).code).toBe("SKILLS_SH_ROLLBACK_INCOMPLETE");
+    expect((e as Error).message).toContain(ssotPath);
+  });
+
+  test("skillAddCandidate 复核 source 已被移除 -> SOURCE_ID_UNKNOWN（不复制）", async () => {
+    const dir = await tempDir("asm-gone-src-");
+    await writeSkill(path.join(dir, "foo"), "foo", "v1");
+    const result = await addSource(configStore, stateStore, dir);
+    const index = await refreshIndex(await configStore.read(), await stateStore.read());
+    const candidate = index.skills["foo"].candidates[0];
+    // refresh 后移除 source，使 candidate.sourceId 失效
+    await removeSource(configStore, stateStore, result.source.id);
+    const { skillAddCandidate } = await import("../src/core/services/skill-service.js");
+    await expectBizCode(Promise.resolve(skillAddCandidate(configStore, stateStore, candidate)).then(() => undefined), "SOURCE_ID_UNKNOWN");
   });
 });

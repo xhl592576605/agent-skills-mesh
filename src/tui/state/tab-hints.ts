@@ -19,6 +19,7 @@ const TAB_HINT_KEYS: Record<AppTab, readonly TKey[]> = {
   source: [
     "hint.moveV",
     "hint.add",
+    "hint.discover",
     "hint.update",
     "hint.remove",
     "hint.enDis",

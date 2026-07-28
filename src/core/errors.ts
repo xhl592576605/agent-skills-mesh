@@ -52,7 +52,17 @@ export type ErrorCode =
   | "AGENT_ALREADY_EXISTS"
   | "AGENT_BUILTIN_NO_REMOVE"
   // safe-path 校验（跨平台 skill 名）
-  | "INVALID_SKILL_NAME";
+  | "INVALID_SKILL_NAME"
+  // skills.sh 发现与安装编排（design §7）
+  | "SKILLS_SH_QUERY_TOO_SHORT"
+  | "SKILLS_SH_UNAVAILABLE"
+  | "SKILLS_SH_INVALID_RESPONSE"
+  | "SKILLS_SH_INVALID_GITHUB_SOURCE"
+  | "SKILLS_SH_SOURCE_DISABLED"
+  | "SKILLS_SH_SOURCE_AMBIGUOUS"
+  | "SKILLS_SH_CANDIDATE_NOT_FOUND"
+  | "SKILLS_SH_CANDIDATE_AMBIGUOUS"
+  | "SKILLS_SH_ROLLBACK_INCOMPLETE";
 
 /**
  * 带 `code` / `params` 的 `Error`（非子类）。`params` 供 UI 层 `{{name}}` 插值翻译。

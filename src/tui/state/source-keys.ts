@@ -10,8 +10,8 @@ import type { ViewKeyHandler } from "../context/view-key.js"
  * handler 语义：返回 true=已消费（AppShell 跳过全局键），false=交回 AppShell 全局键
  * （1/2/3 切 tab、ctrl+r refresh、ESC 退出、? help）。
  *
- * 写操作（add/update/remove/enable/disable/detail）经组件注入的回调触发，回调内部
- * 串弹窗确认 + core service + data.reload/refresh（详见 SourceView.tsx）。
+ * 写操作（add/update/remove/enable/disable/detail/discover）经组件注入的回调触发，
+ * 回调内部串弹窗确认 + core service + data.reload/refresh（详见 SourceView.tsx）。
  */
 
 /** `createSourceKeyHandler` 依赖：光标 accessor + 行数 + 写操作回调。 */
@@ -29,12 +29,15 @@ export interface SourceKeyDeps {
   onEnable: () => void | Promise<void>
   onDisable: () => void | Promise<void>
   onDetail: () => void | Promise<void>
+  /** `/` 打开 skills.sh 搜索弹窗（design §6.1）。与 `a` 手动添加互不影响。 */
+  onDiscover: () => void | Promise<void>
 }
 
 /**
  * 创建 SourceView 的按键 handler。
  *
  * - `↑↓`/`kj`：移动光标（clamp 到 [0, rowCount-1]）
+ * - `/`：打开 skills.sh 搜索弹窗（返回 true 消费；与 Skill 页 `/` 一致心智）
  * - `a`/`u`/`d`/`e`/`x`/`enter`：触发对应写操作回调（返回 true 消费）
  * - 其余键（1/2/3/ctrl+r/esc/?）返回 false 交回 AppShell 全局键
  */
@@ -47,6 +50,11 @@ export function createSourceKeyHandler(deps: SourceKeyDeps): ViewKeyHandler {
     }
     if (k === "down" || k === "j") {
       moveCursor(deps, 1)
+      return true
+    }
+    // `/` 打开 skills.sh 搜索（design §6.1）。用 sequence 检测（与 skill-agent-keys 一致）。
+    if (key.sequence === "/") {
+      void deps.onDiscover()
       return true
     }
     if (k === "a") {

@@ -27,6 +27,7 @@ Agent Skills Mesh (`asm`) splits skill management into three layers — **where 
 - **Single source of truth (SSOT)** — each skill stored once; change it once and every enabled agent stays in sync
 - **Symlink / junction distribution** — enable/disable just creates/removes a link (symlink on macOS/Linux, directory junction on Windows): zero-copy, instant
 - **Multiple source types** — git repo / local folder / single skill, auto-inferred
+- **skills.sh discovery** — search GitHub skills directly from the TUI Source page via `/` (top-50 relevance, `owner/repo` only); after confirmation the source is registered/reused and the skill is added to SSOT without auto-enabling any agent; if the endpoint is unavailable you can still press `a` to add a source manually
 - **Full lifecycle** — search, add, update, remove, rebind orphans, batch operations
 - **Interactive TUI** — built on [@opentui/solid](https://opentui.com): skill×agent matrix + web-style modal dialogs + fuzzy search
 - **Health checks (doctor)** — external / broken-link / orphan / source-missing / conflict, with one-key locate & repair
@@ -101,7 +102,7 @@ Three tabs (`1`/`2`/`3` to switch):
 | Tab | Content | Key actions |
 |---|---|---|
 | **Skill×Agent** | skill×agent matrix, cells `[on]`/`[off]`/`[!]` | `space` toggle · `a`/`d` batch row · `enter` review · `i` details |
-| **Source** | source list | `a` add · `u` update · `d` remove · `e`/`x` enable/disable |
+| **Source** | source list | `/` search skills.sh · `a` add · `u` update · `d` remove · `e`/`x` enable/disable |
 | **Doctor** | health issues + adoptable candidates | `f` fix selected · `F` fix all |
 
 | Key | Action |

@@ -361,6 +361,91 @@ await fs.symlink(ssotPath, safeJoin(agentSkillsDir, skillName, "agent skill path
 
 ---
 
+## Scenario: Remote Skill Discovery with Compensated Local Installation
+
+### 1. Scope / Trigger
+
+- Trigger: a TUI discovery provider returns a remote skill reference that must enter the existing source → SSOT skill → agent lifecycle.
+- Applies to: `skills-sh-service.ts`, `skills-sh-install-service.ts`, `skill-service.ts`, the Source TUI dialog, and external URL helpers.
+- Required because an untrusted remote result can cause a git clone plus config, SSOT, state, and index writes.
+
+### 2. Signatures
+
+```ts
+searchSkillsSh(options: { query: string; signal?: AbortSignal; fetchImpl?: typeof fetch }): Promise<SkillsShSearchResult>
+buildSkillsShInstallPlan(config: AppConfig, state: StateFile, ref: SkillsShSkillRef): SkillsShInstallPlan
+applySkillsShInstallPlan(stores: SkillsShInstallStores, plan: SkillsShInstallPlan): Promise<SkillsShInstallResult>
+openExternalUrl(url: string): Promise<void>
+```
+
+The TUI consumes these typed functions. It must not clone repositories, copy skills, update stores, or construct arbitrary clone URLs itself.
+
+### 3. Contracts
+
+- Search uses only `GET https://skills.sh/api/search?q=<encoded>&limit=50`; queries shorter than two trimmed characters do not request the service.
+- The response parser accepts the documented local raw shape and keeps only strict GitHub `owner/repo` sources. Clone URLs are reconstructed as fixed HTTPS GitHub URLs by Core.
+- The public endpoint does not provide descriptions or reliable server pagination. The TUI paginates the returned Top 50 locally, does not claim a directory total, does not scrape web pages, and does not clone solely for preview.
+- Detail links remain visible text. `tab` selects skills.sh or GitHub and `o` opens the selected fixed HTTP(S) URL in the system browser. There is no clipboard integration and no raw shell interpolation.
+- Installation is single-skill: create or reuse one canonical git source, refresh, match exactly one candidate by `candidate.skillName === ref.skillId`, copy that candidate to SSOT, write state, and rebuild index.
+- Installation never auto-enables an agent. `enabledAgents` stays empty until the user explicitly changes the Skill × Agent matrix.
+- Only a source created by the current invocation may be compensated. A reused source is never deleted, pulled, reset, re-enabled, or otherwise mutated.
+- SSOT + state are committed facts. Failure of the final rebuildable `index.json` write returns `indexUpdated: false` plus a warning rather than deleting committed resources.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Search timeout, network error, non-2xx, or schema drift | Return a typed translatable error; keep manual source add available |
+| Remote source is not strict GitHub `owner/repo` | Filter before selection or reject at the install boundary |
+| `skillId` is unsafe | Reject before clone or filesystem writes |
+| No canonical source exists | Plan `create` with the Core-constructed HTTPS clone URL |
+| One enabled canonical source exists | Plan `reuse`; do not pull or modify it |
+| Canonical source is disabled or duplicated | Return an explicit conflict; never guess or enable automatically |
+| Candidate count inside the selected source is zero or greater than one | Fail explicitly; do not fall back to API name, id, or directory basename |
+| State write fails after this invocation created an SSOT target | Remove only that new target; report rollback-incomplete if cleanup fails |
+| A newly created source fails before skill commit | Remove only its owned config record and contained clone path |
+| A reused source fails at any stage | Preserve its config, checkout, and all previously installed skills |
+| External URL is invalid or not HTTP(S) | Refuse before spawning a process |
+
+### 5. Good/Base/Bad Cases
+
+- Good: installing a second skill from the same GitHub repository reuses one source and records a distinct per-skill `relativePath` without another clone.
+- Base: selecting a result opens a same-dialog confirmation view; `backspace` returns to the unchanged search results, and `o` opens the selected details URL.
+- Bad: compare the API `id` with ASM `candidate.id`, fuzzy-match the display name, or clone an API-provided arbitrary URL.
+- Bad: call source purge on a reused source after a later step fails.
+- Bad: use `exec("open " + url)` or another shell-concatenated browser command.
+
+### 6. Tests Required
+
+- Search tests: minimum query length, fixed encoded URL and limit, timeout/abort, HTTP/network/schema failures, strict GitHub filtering, and empty results.
+- Plan/apply tests: create, canonical reuse variants, disabled/ambiguous source, exact candidate match, missing/ambiguous candidate, same-repository second skill, and empty `enabledAgents`.
+- Failure-injection tests must assert the exact final config, clone, SSOT, state, and index state for created and reused sources; do not assert only that an error was thrown.
+- Transaction tests must prove state-write failure removes only a target created by that call and preserves pre-existing SSOT content.
+- TUI tests: debounce/race handling, local pagination, installed-item blocking, same-dialog back navigation, detail URL construction/link selection, and i18n key/placeholder parity.
+- System action tests must assert platform commands receive URL arguments without a shell and reject non-HTTP(S) protocols.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+// Remote display metadata is not a filesystem identity, and this has no rollback boundary.
+const source = await addRepoSource(configStore, apiResult.url);
+const candidate = index.skills[apiResult.name].candidates[0];
+await copySkillDirToSsot(candidate.path, target, { replace: true });
+```
+
+#### Correct
+
+```ts
+const plan = buildSkillsShInstallPlan(config, state, ref); // read-only conflicts first
+if (plan.hasConflict) return plan;
+const result = await applySkillsShInstallPlan(stores, plan); // fresh-read + owned compensation
+if (!result.indexUpdated) showRefreshWarning(result.warnings);
+```
+
+---
+
 ## Forbidden Patterns
 
 - Do not silently overwrite user config, index files, existing skill directories, or existing non-matching symlinks.
@@ -375,6 +460,7 @@ await fs.symlink(ssotPath, safeJoin(agentSkillsDir, skillName, "agent skill path
 - Support `ASM_HOME` in tests, smoke tests, and examples that mutate storage.
 - Use temp directories for symlink install/uninstall tests.
 - Prefer build-plan/apply-plan separation for any write operation.
+- **Multi-step write orchestration must compensate on failure.** When a service writes more than one resource in sequence (e.g. config source + SSOT copy + state record + index refresh, as in `applySkillsShInstallPlan` or `skillAddCandidate`), a failure at step N must remove resources created by steps 1..N-1 **in this invocation only** — never resources that pre-existed the call. If cleanup itself fails, throw a `*_ROLLBACK_INCOMPLETE` `bizError` carrying the original error and the residual path(s); never swallow it or report success. Resources already committed (e.g. SSOT + state written before a final `index.json` refresh fails) are **not** rolled back — return a partial-success result with a warning and let the user retry the rebuildable step. Reference implementations: `skillAddCandidate` (`src/core/services/skill-service.ts`), `applySkillsShInstallPlan` ownership-token rollback (`src/core/services/skills-sh-install-service.ts`).
 - Use atomic writes for JSON index updates.
 - Keep CLI output human-readable, but keep core services typed and testable independently from CLI formatting.
 

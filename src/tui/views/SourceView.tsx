@@ -25,8 +25,14 @@ import { SelectDialog } from "../dialogs/SelectDialog.js"
 import { AddSourceDialog } from "../dialogs/AddSourceDialog.js"
 import { MultiSelectDialog } from "../dialogs/MultiSelectDialog.js"
 import { SkillMdDialog } from "../dialogs/SkillMdDialog.js"
+import { SkillsShSearchDialog, type SkillsShInstallOutcome } from "../dialogs/SkillsShSearchDialog.js"
+import type { SkillsShSkillRef } from "../../core/services/skills-sh-service.js"
 import { skillAdd, skillUpdate } from "../../core/services/skill-service.js"
-import { errorMessage } from "../../i18n/index.js"
+import {
+  applySkillsShInstallPlan,
+  buildSkillsShInstallPlan
+} from "../../core/services/skills-sh-install-service.js"
+import { errorMessage, type TKey } from "../../i18n/index.js"
 import path from "node:path"
 import {
   createSourceKeyHandler,
@@ -65,6 +71,8 @@ export function SourceView() {
   const [message, setMessage] = createSignal("")
   const [updating, setUpdating] = createSignal(false)
   const [updatingSkill, setUpdatingSkill] = createSignal(false)
+  /** skills.sh 远程安装进行中的技能名（null=空闲）。独占操作，busy guard 防重复触发。 */
+  const [installingRemote, setInstallingRemote] = createSignal<string | null>(null)
 
   const sources = (): SourceConfig[] => {
     const cfg = data.snapshot.config
@@ -91,7 +99,8 @@ export function SourceView() {
     onRemove: doRemove,
     onEnable: () => doToggle(true),
     onDisable: () => doToggle(false),
-    onDetail: doDetail
+    onDetail: doDetail,
+    onDiscover: doDiscover
   })
   onMount(() => viewKey.setHandler(handleKey))
   onCleanup(() => viewKey.setHandler(null))
@@ -100,6 +109,58 @@ export function SourceView() {
   async function sync(): Promise<void> {
     await data.reload()
     await data.refresh()
+  }
+
+  /**
+   * skills.sh 远程发现 → 单选安装（prd R3/R4/R5）。
+   *
+   * 流程：`/` → 搜索弹窗（内置确认视图：选中→确认→安装，backspace 返回列表保留结果）
+   * → 弹窗 `enter` 触发 `onInstall` 回调（此处 fresh buildPlan → 冲突返回消息 → 否则
+   * `applySkillsShInstallPlan` → full `data.reload()`）→ 成功关弹窗 / 冲突·失败回列表。
+   * 取消确认不再丢失搜索（design §6.3 “先关搜索再开 ConfirmDialog” 的取舍已被内置
+   * 确认视图取代）。TUI 不自行操作 config/clone/SSOT。
+   */
+  async function doDiscover(): Promise<void> {
+    if (installingRemote() !== null) return // busy guard
+    if (!data.snapshot.config || !data.snapshot.state) {
+      setMessage(i18n.t("common.loading"))
+      return
+    }
+    await SkillsShSearchDialog.show(dialog, onInstall)
+  }
+
+  /** 搜索弹窗确认后回调：fresh buildPlan → apply → reload，返回 outcome 给弹窗决定关/回列表。 */
+  async function onInstall(ref: SkillsShSkillRef): Promise<SkillsShInstallOutcome> {
+    const config = data.snapshot.config
+    const state = data.snapshot.state
+    if (!config || !state) return { outcome: "failed", message: i18n.t("common.loading") }
+    setInstallingRemote(ref.name)
+    try {
+      const plan = buildSkillsShInstallPlan(config, state, ref)
+      if (plan.hasConflict) {
+        return { outcome: "conflict", message: i18n.t(`err.${plan.conflictCode}` as TKey, plan.conflictParams ?? {}) }
+      }
+      const configStore = new ConfigStore()
+      const stateStore = new StateStore(configStore.home)
+      const indexStore = new IndexStore(configStore.home)
+      const result = await applySkillsShInstallPlan({ configStore, stateStore, indexStore }, plan)
+      // 注册 source 改 config → 必须 full reload（不只 refresh index）。
+      await data.reload()
+      const actionLabel =
+        plan.source.action === "create"
+          ? i18n.t("skillsSh.actionCreateLabel")
+          : i18n.t("skillsSh.actionReuseLabel")
+      setMessage(
+        result.indexUpdated
+          ? i18n.t("skillsSh.installOk", { name: ref.skillId, action: actionLabel })
+          : i18n.t("skillsSh.installIndexWarning", { name: ref.skillId }),
+      )
+      return { outcome: "installed", message: "" }
+    } catch (err) {
+      return { outcome: "failed", message: i18n.t("skillsSh.installFailed", { message: errorMessage(err, i18n.locale()) }) }
+    } finally {
+      setInstallingRemote(null)
+    }
   }
 
   async function doAdd(): Promise<void> {
@@ -286,6 +347,7 @@ export function SourceView() {
   const updatableCount = () =>
     data.snapshot.state ? countUpdatableSources(data.snapshot.state.sourceSnapshots ?? {}) : 0
   const statusLine = () => {
+    if (installingRemote() !== null) return i18n.t("skillsSh.installing", { name: installingRemote()! })
     if (updating()) return i18n.t("common.pulling")
     if (updatingSkill()) return i18n.t("common.updating")
     if (updatableCount() > 0) return i18n.t("status.sourcesUpdatable", { count: updatableCount() })
@@ -366,9 +428,9 @@ export function SourceView() {
           )}
         </Show>
       </Panel>
-      <Show when={message() || updatableCount() > 0 || updating() || updatingSkill()}>
+      <Show when={message() || updatableCount() > 0 || updating() || updatingSkill() || installingRemote() !== null}>
         <box height={1} backgroundColor={theme.panelMuted} paddingLeft={1} paddingRight={1}>
-          <text fg={updating() || updatingSkill() || updatableCount() > 0 ? theme.danger : theme.warning}>{statusLine()}</text>
+          <text fg={updating() || updatingSkill() || installingRemote() !== null || updatableCount() > 0 ? theme.danger : theme.warning}>{statusLine()}</text>
         </box>
       </Show>
     </box>

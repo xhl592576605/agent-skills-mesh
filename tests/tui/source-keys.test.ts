@@ -42,6 +42,7 @@ function makeDeps(overrides: Partial<SourceKeyDeps> = {}): SourceKeyDeps {
     onEnable: vi.fn(),
     onDisable: vi.fn(),
     onDetail: vi.fn(),
+    onDiscover: vi.fn(),
     ...overrides
   }
 }
@@ -112,6 +113,22 @@ describe("createSourceKeyHandler — 写操作回调", () => {
     const handler = createSourceKeyHandler(deps)
     expect(handler(key("return"))).toBe(true)
     expect(deps.onDetail).toHaveBeenCalledOnce()
+  })
+})
+
+describe("createSourceKeyHandler — skills.sh 发现 (/)", () => {
+  it("`/` 触发 onDiscover 并消费", () => {
+    const deps = makeDeps()
+    const handler = createSourceKeyHandler(deps)
+    expect(handler(key("/", { sequence: "/" }))).toBe(true)
+    expect(deps.onDiscover).toHaveBeenCalledOnce()
+  })
+
+  it("`/` 不触发 onAdd（互不影响）", () => {
+    const deps = makeDeps()
+    const handler = createSourceKeyHandler(deps)
+    handler(key("/", { sequence: "/" }))
+    expect(deps.onAdd).not.toHaveBeenCalled()
   })
 })
 

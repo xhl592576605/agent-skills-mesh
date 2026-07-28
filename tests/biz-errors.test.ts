@@ -26,6 +26,15 @@ const ALL_PARAMS = {
   tempPath: "/tmp/transfer/xyz",
   sourceDir: "/tmp/source/my-skill",
   message: "boom",
+  // skills.sh 错误码占位符
+  length: 2,
+  kind: "timeout",
+  reason: "shape",
+  source: "owner/repo",
+  key: "github:owner/repo",
+  skillId: "foo",
+  ms: 10_000,
+  status: 500,
 };
 
 /** 从基准英文字典反推全部业务错误码（排除 C 类 systemPrefix——它不是 ErrorCode）。 */
@@ -34,8 +43,8 @@ const ERR_CODES = Object.keys(dictEn)
   .map((k) => k.slice("err.".length)) as ErrorCode[];
 
 describe("bizError + i18n 字典链路（W1：每个 ErrorCode 可翻译）", () => {
-  test("err code 数量符合预期（防意外删减：Phase B/W2 的 14 + W1 的 19）", () => {
-    expect(ERR_CODES).toHaveLength(34);
+  test("err code 数量符合预期（防意外删减：Phase B/W2 的 14 + W1 的 19 + skills.sh 的 9）", () => {
+    expect(ERR_CODES).toHaveLength(43);
   });
 
   test("en/zh 字典 err.* key 集合一致（完整性，AC7）", () => {
