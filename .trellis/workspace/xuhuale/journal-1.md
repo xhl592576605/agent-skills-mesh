@@ -485,3 +485,36 @@ Windows 用 junction（无需特权）/ POSIX 用 symlink 统一软连接（crea
 ### Next Steps
 
 - None - task complete
+
+
+## Session 14: 集成 skills.sh 技能搜索与安装
+
+**Date**: 2026-07-28
+**Task**: 集成 skills.sh 技能搜索与安装
+**Branch**: `main`
+
+### Summary
+
+在 Source TUI 接入 skills.sh Top 50 实时搜索、同弹窗确认与浏览器详情链接；实现 GitHub source 规范化复用、事务化 SSOT 安装和严格失败补偿；补齐中英文、测试、文档与 code-spec，并升级版本至 0.3.0。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3531379` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

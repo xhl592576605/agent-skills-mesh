@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 13
-- **Last Active**: 2026-07-15
+- **Total Sessions**: 14
+- **Last Active**: 2026-07-28
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~487 | Active |
+| `journal-1.md` | ~520 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 14 | 2026-07-28 | 集成 skills.sh 技能搜索与安装 | `3531379` | `main` |
 | 13 | 2026-07-15 | TUI 更新提示与自动检查 | `d0cbb6d`, `8ae185d` | `main` |
 | 12 | 2026-07-09 | 跨平台兼容性修复（junction 方案） | `937ef10` | `main` |
 | 11 | 2026-07-09 | TUI 样式重设计：DataTable 封装 + 蒙层 CJK bug 修复 + 键位调整 | `1edb57b` | `main` |
