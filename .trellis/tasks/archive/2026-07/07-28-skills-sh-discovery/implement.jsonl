@@ -1,0 +1,9 @@
+{"file":".trellis/spec/backend/index.md","reason":"Core 本地服务分层与 typed service 基本约束。"}
+{"file":".trellis/spec/backend/error-handling.md","reason":"skills.sh 网络/响应/冲突错误需遵循 bizError 与中英错误码契约。"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"source、SSOT、state、路径 containment 与临时目录测试的安全门。"}
+{"file":".trellis/spec/frontend/index.md","reason":"TUI 必须是 Core typed service 之上的薄交互层。"}
+{"file":".trellis/spec/frontend/solid-patterns.md","reason":"实时搜索弹窗的 Solid owner、键盘、paste、cleanup 与集中路由约束。"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"搜索 pending 状态、Dialog 栈和 config 变更后的 full reload 契约。"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"颜色无关、确认模型、纯状态测试与 Bun renderer 测试要求。"}
+{"file":".trellis/tasks/07-28-skills-sh-discovery/research/skills-sh-to-asm-lifecycle.md","reason":"API 引用到 source/candidate/SSOT 的精确映射、复用与回滚研究。"}
+{"file":".trellis/tasks/07-28-skills-sh-discovery/research/minimal-tui-skills-sh-search-dialog.md","reason":"Source 入口、弹窗状态机、防抖竞态和测试研究；实现时以 design.md 的 Top 50 本地分页修正为准。"}

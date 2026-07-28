@@ -1,0 +1,7 @@
+{"file":".trellis/spec/backend/error-handling.md","reason":"检查新增错误码、typed failure 与 fallback 文案是否符合现有约定。"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"检查 source/SSOT/state 写入、containment、冲突与回滚安全。"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"检查颜色无关、确认流程、键路由及两层 TUI 测试。"}
+{"file":".trellis/spec/frontend/solid-patterns.md","reason":"检查防抖/abort cleanup、owner context、paste 和集中键盘路由。"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"检查 Dialog 栈、pending 状态与 config 变更后的 full reload。"}
+{"file":".trellis/tasks/07-28-skills-sh-discovery/research/skills-sh-to-asm-lifecycle.md","reason":"核对 candidate 精确匹配、canonical source 复用和严格补偿边界。"}
+{"file":".trellis/tasks/07-28-skills-sh-discovery/research/minimal-tui-skills-sh-search-dialog.md","reason":"核对 TUI 交互、竞态、颜色无关状态与测试覆盖；分页以 design.md 修正为准。"}
