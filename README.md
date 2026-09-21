@@ -1,3 +1,5 @@
+
+
 <div align="center">
   <h1>Agent Skills Mesh</h1>
   <p><strong>三层技能管理器</strong> · 单一可信源 + symlink 分发</p>
@@ -38,7 +40,7 @@ Agent Skills Mesh（命令名 `asm`）把"技能**从哪来**、**存在哪**、
 ### 安装
 
 > [!NOTE]
-> `agent-skills-mesh@0.1.2` 已发布到 npm。主包会通过 `optionalDependencies` 自动安装当前平台的 standalone 子包（darwin-arm64 / darwin-x64 / linux-x64 / win32-x64）。
+> `agent-skills-mesh@0.3.0` 已发布到 npm。主包会通过 `optionalDependencies` 自动安装当前平台的 standalone 子包（darwin-arm64 / darwin-x64 / linux-x64 / win32-x64）。
 
 **npm 全局安装（推荐）**
 
